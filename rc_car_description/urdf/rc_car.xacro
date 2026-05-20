@@ -112,6 +112,7 @@
     <origin xyz="0 ${track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/> 
     <axis xyz="0 0 1"/>
     <limit effort="1.0" velocity="100.0"/> 
+    <dynamics damping="0.001" friction="0.001"/> <!-- Add this line -->
   </joint>
 
   <xacro:rc_wheel prefix="rear_right" mesh_rpy="${M_PI/2.0} 0 0"/>
@@ -121,6 +122,7 @@
     <origin xyz="0 ${-track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/>
     <axis xyz="0 0 1"/>
     <limit effort="1.0" velocity="100.0"/> 
+    <dynamics damping="0.001" friction="0.001"/> <!-- Add this line -->
   </joint>
 
   <xacro:macro name="front_steer_assembly" params="prefix y_offset mesh_rpy">
@@ -134,6 +136,7 @@
       <origin xyz="${wheelbase} ${y_offset} 0" rpy="0 0 0"/>
       <axis xyz="0 0 1"/> 
       <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="100.0" velocity="2.0"/>
+      <dynamics damping="0.001" friction="0.001"/> <!-- Add this line -->
     </joint>
 
     <xacro:rc_wheel prefix="${prefix}" mesh_rpy="${mesh_rpy}"/>
@@ -143,6 +146,7 @@
       <origin xyz="0 0 0" rpy="-${M_PI/2.0} 0 0"/>
       <axis xyz="0 0 1"/>
       <limit effort="1.0" velocity="100.0"/> 
+      <dynamics damping="0.001" friction="0.001"/> <!-- Add this line -->
     </joint>
   </xacro:macro>
 
