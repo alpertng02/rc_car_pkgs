@@ -59,7 +59,8 @@
         <box size="0.25 0.08 0.05"/> 
       </geometry>
     </collision>
-<xacro:box_inertia m="1.5" w="0.12" h="0.05" d="0.25" x_offset="${chassis_x_offset}" z_offset="-0.02"/>  </link>
+    <xacro:box_inertia m="1.5" w="0.12" h="0.05" d="0.25" x_offset="${chassis_x_offset}" z_offset="-0.02"/>
+  </link>
 
   <!-- Dummy Steering Wheel to satisfy the Ackermann plugin -->
   <link name="steering_wheel_link">
@@ -111,7 +112,7 @@
     <origin xyz="0 ${track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/> 
     <axis xyz="0 0 1"/>
     <limit effort="5.0" velocity="100.0"/> 
-    <dynamics damping="0.001" friction="0.05"/> <!-- Add this line -->
+    <dynamics damping="0.001" friction="0.05"/>
   </joint>
 
   <xacro:rc_wheel prefix="rear_right" mesh_rpy="${M_PI/2.0} 0 0"/>
@@ -121,7 +122,7 @@
     <origin xyz="0 ${-track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/>
     <axis xyz="0 0 1"/>
     <limit effort="5.0" velocity="100.0"/> 
-    <dynamics damping="0.001" friction="0.05"/> <!-- Add this line -->
+    <dynamics damping="0.001" friction="0.05"/>
   </joint>
 
   <xacro:macro name="front_steer_assembly" params="prefix y_offset mesh_rpy">
@@ -135,7 +136,7 @@
       <origin xyz="${wheelbase} ${y_offset} 0" rpy="0 0 0"/>
       <axis xyz="0 0 1"/> 
       <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="100.0" velocity="2.0"/>
-      <dynamics damping="0.001" friction="0.05"/> <!-- Add this line -->
+      <dynamics damping="0.001" friction="0.05"/>
     </joint>
 
     <xacro:rc_wheel prefix="${prefix}" mesh_rpy="${mesh_rpy}"/>
@@ -145,13 +146,133 @@
       <origin xyz="0 0 0" rpy="-${M_PI/2.0} 0 0"/>
       <axis xyz="0 0 1"/>
       <limit effort="5.0" velocity="100.0"/> 
-      <dynamics damping="0.001" friction="0.05"/> <!-- Add this line -->
+      <dynamics damping="0.001" friction="0.05"/>
     </joint>
   </xacro:macro>
 
   <xacro:front_steer_assembly prefix="front_left" y_offset="${track_width/2}" mesh_rpy="-${M_PI/2.0} 0 0"/>
   <xacro:front_steer_assembly prefix="front_right" y_offset="-${track_width/2}" mesh_rpy="${M_PI/2.0} 0 0"/>
 
+  <!-- =============================== -->
+  <!-- INTEGRATED RPLIDAR A1           -->
+  <!-- =============================== -->
+  <material name="black_lidar">
+    <color rgba="0 0 0 1" />
+  </material>
+
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="laser_frame"/>
+    <origin xyz="0.14 0 0.1" rpy="0 0 ${M_PI}"/>
+  </joint>
+
+<link name="laser_frame">
+    <visual>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="file://$(find rc_car_description)/meshes/rplidar_a1.STL" />
+      </geometry>
+      <material name="black_lidar"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+      <geometry>
+        <!-- Replaced the STL mesh with a simple cylinder to prevent segfaults -->
+        <cylinder radius="0.035" length="0.05"/>
+      </geometry>
+    </collision>
+    <xacro:dummy_inertia/>
+  </link>
+
+  <gazebo reference="laser_frame">
+    <material>Gazebo/Black</material>
+    <sensor name="laser" type="ray">
+      <pose> 0 0 0 0 0 0 </pose>
+      <visualize>true</visualize>
+      <update_rate>5.5</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>363</samples>
+            <resolution>1</resolution>
+            <min_angle>${-M_PI}</min_angle>
+            <max_angle>${M_PI}</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.15</min>
+          <max>12.0</max>
+          <resolution>0.05</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </ray>
+      <plugin name="laser_controller" filename="libgazebo_ros_ray_sensor.so">
+        <ros>
+          <remapping>~/out:=scan_raw</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>laser_frame</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+<!-- =============================== -->
+  <!-- INTEGRATED JETSON NANO          -->
+  <!-- =============================== -->
+  <material name="green_pcb">
+    <color rgba="0 0.5 0 1" />
+  </material>
+
+  <joint name="jetson_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="jetson_link"/>
+    <!-- Positioned behind the LiDAR. Adjust the negative X value to slide it further back if needed. -->
+    <origin xyz="-0.02 0 0.06" rpy="0 0 0"/> 
+  </joint>
+
+<link name="jetson_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <!-- Change the extension from .stl to .dae -->
+        <mesh filename="file://$(find rc_car_description)/meshes/jetson_nano.dae" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <!-- The <material> tag is removed because the .dae handles it natively -->
+    </visual>
+    <xacro:dummy_inertia/>
+  </link>
+
+  <!-- =============================== -->
+  <!-- HC-SR04 ULTRASONIC SENSOR       -->
+  <!-- =============================== -->
+
+
+  <joint name="ultrasonic_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ultrasonic_link"/>
+    <!-- Positioned at the front edge of the 0.25m chassis -->
+    <origin xyz="0.185 0 0.015" rpy="0 0 0"/>
+  </joint>
+
+  <link name="ultrasonic_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="${M_PI / 2} ${M_PI} ${M_PI / 2}"/>
+      <geometry>
+        <!-- Change the extension from .stl to .dae -->
+        <mesh filename="file://$(find rc_car_description)/meshes/hc-sr-04.dae" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+    <!-- Omit collision to avoid raycast bugs -->
+    <xacro:dummy_inertia/>
+  </link>
+
+  <!-- =============================== -->
+  <!-- ACKERMANN DRIVE PLUGIN          -->
+  <!-- =============================== -->
   <gazebo>
     <plugin name="gazebo_ros_ackermann_drive" filename="libgazebo_ros_ackermann_drive.so">
       <ros>
@@ -185,9 +306,9 @@
       <robot_base_frame>base_footprint</robot_base_frame>
 
       <!-- PID tuning -->
-      <left_steering_pid_gain>10.0 0.0 0.1</left_steering_pid_gain>
+      <left_steering_pid_gain>50.0 0.0 0.1</left_steering_pid_gain>
       <left_steering_i_range>0 0</left_steering_i_range>
-      <right_steering_pid_gain>10.0 0.0 0.1</right_steering_pid_gain>
+      <right_steering_pid_gain>50.0 0.0 0.1</right_steering_pid_gain>
       <right_steering_i_range>0 0</right_steering_i_range>
       <linear_velocity_pid_gain>5.0 0.0 0.0</linear_velocity_pid_gain>
       <linear_velocity_i_range>0 0</linear_velocity_i_range>
@@ -197,6 +318,51 @@
       <publish_wheel_tf>true</publish_wheel_tf>
       <publish_distance>true</publish_distance>
     </plugin>
+  </gazebo>
+
+<gazebo reference="ultrasonic_link">
+    <material>Gazebo/Blue</material>
+    <sensor name="hcsr04" type="ray">
+      <pose>0 0 0 0 0 0</pose>
+      <!-- You can leave this true! A 5x5 ray grid won't lag your GPU like the LiDAR did -->
+      <visualize>true</visualize> 
+      <update_rate>20.0</update_rate> <!-- HC-SR04 practical update rate -->
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>5</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.13</min_angle> <!-- -7.5 degrees -->
+            <max_angle>0.13</max_angle>  <!-- +7.5 degrees -->
+          </horizontal>
+          <vertical>
+            <samples>5</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.01</min_angle>
+            <max_angle>0.0314</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.05</min> <!-- 5cm minimum range -->
+          <max>4.0</max>  <!-- 400cm maximum range -->
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.025</stddev>
+        </noise>
+      </ray>
+      <plugin name="ultrasonic_sensor" filename="libgazebo_ros_ray_sensor.so">
+        <ros>
+          <remapping>~/out:=ultrasonic/range</remapping>
+        </ros>
+        <!-- Tell the plugin to format the data as a Range message, not a LaserScan -->
+        <output_type>sensor_msgs/Range</output_type>
+        <radiation_type>ultrasound</radiation_type>
+        <frame_name>ultrasonic_link</frame_name>
+      </plugin>
+    </sensor>
   </gazebo>
 
 </robot>
