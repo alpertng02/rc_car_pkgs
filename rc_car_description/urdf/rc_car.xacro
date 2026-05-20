@@ -11,9 +11,9 @@
   <xacro:property name="max_steer_angle" value="0.523"/> 
   <xacro:property name="M_PI" value="3.1415926535897931" />
 
-  <xacro:macro name="box_inertia" params="m w h d x_offset">
+  <xacro:macro name="box_inertia" params="m w h d x_offset z_offset">
     <inertial>
-      <origin xyz="${x_offset} 0 0" rpy="0 0 0"/>
+      <origin xyz="${x_offset} 0 ${z_offset}" rpy="0 0 0"/>
       <mass value="${m}"/>
       <inertia ixx="${(m/12) * (h*h + d*d)}" ixy="0.0" ixz="0.0" iyy="${(m/12) * (w*w + d*d)}" iyz="0.0" izz="${(m/12) * (w*w + h*h)}"/>
     </inertial>
@@ -59,8 +59,7 @@
         <box size="0.25 0.08 0.05"/> 
       </geometry>
     </collision>
-    <xacro:box_inertia m="1.5" w="0.12" h="0.05" d="0.25" x_offset="${chassis_x_offset}"/>
-  </link>
+<xacro:box_inertia m="1.5" w="0.12" h="0.05" d="0.25" x_offset="${chassis_x_offset}" z_offset="-0.02"/>  </link>
 
   <!-- Dummy Steering Wheel to satisfy the Ackermann plugin -->
   <link name="steering_wheel_link">
@@ -96,8 +95,8 @@
     </link>
 
     <gazebo reference="${prefix}_wheel_link">
-      <mu1>0.8</mu1>
-      <mu2>0.8</mu2>
+      <mu1>1.2</mu1>
+      <mu2>1.2</mu2>
       <kp>1000000.0</kp>
       <kd>100.0</kd>
       <minDepth>0.001</minDepth>
@@ -111,8 +110,8 @@
     <child link="rear_left_wheel_link"/>
     <origin xyz="0 ${track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/> 
     <axis xyz="0 0 1"/>
-    <limit effort="1.0" velocity="100.0"/> 
-    <dynamics damping="0.001" friction="0.001"/> <!-- Add this line -->
+    <limit effort="5.0" velocity="100.0"/> 
+    <dynamics damping="0.001" friction="0.05"/> <!-- Add this line -->
   </joint>
 
   <xacro:rc_wheel prefix="rear_right" mesh_rpy="${M_PI/2.0} 0 0"/>
@@ -121,8 +120,8 @@
     <child link="rear_right_wheel_link"/>
     <origin xyz="0 ${-track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit effort="1.0" velocity="100.0"/> 
-    <dynamics damping="0.001" friction="0.001"/> <!-- Add this line -->
+    <limit effort="5.0" velocity="100.0"/> 
+    <dynamics damping="0.001" friction="0.05"/> <!-- Add this line -->
   </joint>
 
   <xacro:macro name="front_steer_assembly" params="prefix y_offset mesh_rpy">
@@ -136,7 +135,7 @@
       <origin xyz="${wheelbase} ${y_offset} 0" rpy="0 0 0"/>
       <axis xyz="0 0 1"/> 
       <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="100.0" velocity="2.0"/>
-      <dynamics damping="0.001" friction="0.001"/> <!-- Add this line -->
+      <dynamics damping="0.001" friction="0.05"/> <!-- Add this line -->
     </joint>
 
     <xacro:rc_wheel prefix="${prefix}" mesh_rpy="${mesh_rpy}"/>
@@ -145,8 +144,8 @@
       <child link="${prefix}_wheel_link"/>
       <origin xyz="0 0 0" rpy="-${M_PI/2.0} 0 0"/>
       <axis xyz="0 0 1"/>
-      <limit effort="1.0" velocity="100.0"/> 
-      <dynamics damping="0.001" friction="0.001"/> <!-- Add this line -->
+      <limit effort="5.0" velocity="100.0"/> 
+      <dynamics damping="0.001" friction="0.05"/> <!-- Add this line -->
     </joint>
   </xacro:macro>
 
@@ -180,15 +179,15 @@
 
       <max_steer>${max_steer_angle}</max_steer>
       <max_steering_angle>${max_steer_angle}</max_steering_angle>
-      <max_speed>2.0</max_speed>
+      <max_speed>5.0</max_speed>
 
       <odometry_frame>odom</odometry_frame>
       <robot_base_frame>base_footprint</robot_base_frame>
 
       <!-- PID tuning -->
-      <left_steering_pid_gain>1.0 0.0 0.1</left_steering_pid_gain>
+      <left_steering_pid_gain>10.0 0.0 0.1</left_steering_pid_gain>
       <left_steering_i_range>0 0</left_steering_i_range>
-      <right_steering_pid_gain>1.0 0.0 0.1</right_steering_pid_gain>
+      <right_steering_pid_gain>10.0 0.0 0.1</right_steering_pid_gain>
       <right_steering_i_range>0 0</right_steering_i_range>
       <linear_velocity_pid_gain>5.0 0.0 0.0</linear_velocity_pid_gain>
       <linear_velocity_i_range>0 0</linear_velocity_i_range>
