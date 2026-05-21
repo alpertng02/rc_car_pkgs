@@ -221,6 +221,43 @@
   </gazebo>
 
 <!-- =============================== -->
+  <!-- LIPO BATTERY                    -->
+  <!-- =============================== -->
+  <material name="lipo_blue">
+    <color rgba="0.1 0.5 0.8 1" />
+  </material>
+
+  <joint name="battery_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="battery_link"/>
+    <!-- Positioned squarely between the chassis and the Jetson -->
+    <origin xyz="0.09 0 0.045" rpy="0 0 0"/> 
+  </joint>
+
+  <link name="battery_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <!-- 135mm length, 42mm width, 21mm height -->
+        <box size="0.135 0.042 0.021"/>
+      </geometry>
+      <material name="lipo_blue"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.135 0.042 0.021"/>
+      </geometry>
+    </collision>
+    <!-- Adds ~250g of realistic weight to improve tire traction! -->
+    <xacro:box_inertia m="0.25" w="0.042" h="0.021" d="0.135" x_offset="0" z_offset="0"/>
+  </link>
+
+  <gazebo reference="battery_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+<!-- =============================== -->
   <!-- INTEGRATED JETSON NANO          -->
   <!-- =============================== -->
   <material name="green_pcb">
@@ -231,7 +268,7 @@
     <parent link="base_link"/>
     <child link="jetson_link"/>
     <!-- Positioned behind the LiDAR. Adjust the negative X value to slide it further back if needed. -->
-    <origin xyz="-0.02 0 0.06" rpy="0 0 0"/> 
+    <origin xyz="-0.02 -0.02 0.06" rpy="0 0 0"/> 
   </joint>
 
 <link name="jetson_link">
@@ -255,7 +292,7 @@
     <parent link="base_link"/>
     <child link="ultrasonic_link"/>
     <!-- Positioned at the front edge of the 0.25m chassis -->
-    <origin xyz="0.185 0 0.015" rpy="0 0 0"/>
+    <origin xyz="0.19 0 0.01" rpy="0 0 0"/>
   </joint>
 
   <link name="ultrasonic_link">
