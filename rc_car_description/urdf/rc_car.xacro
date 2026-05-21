@@ -3,8 +3,8 @@
 
   <xacro:property name="pkg_name" value="rc_car_description"/>
     
-  <xacro:property name="wheelbase" value="0.167"/>   
-  <xacro:property name="chassis_x_offset" value="0.086"/> 
+  <xacro:property name="wheelbase" value="0.1688"/>   
+  <xacro:property name="chassis_x_offset" value="0.094"/> 
   <xacro:property name="track_width" value="0.162"/> 
   <xacro:property name="wheel_radius" value="0.03"/>
   <xacro:property name="wheel_width" value="0.03"/>
