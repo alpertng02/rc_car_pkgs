@@ -135,7 +135,7 @@
       <child link="${prefix}_steer_link"/>
       <origin xyz="${wheelbase} ${y_offset} 0" rpy="0 0 0"/>
       <axis xyz="0 0 1"/> 
-      <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="100.0" velocity="2.0"/>
+      <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="100.0" velocity="5.0"/>
       <dynamics damping="0.001" friction="0.05"/>
     </joint>
 
@@ -343,9 +343,9 @@
       <robot_base_frame>base_footprint</robot_base_frame>
 
       <!-- PID tuning -->
-      <left_steering_pid_gain>50.0 0.0 0.1</left_steering_pid_gain>
+      <left_steering_pid_gain>5.0 0.0 0.1</left_steering_pid_gain>
       <left_steering_i_range>0 0</left_steering_i_range>
-      <right_steering_pid_gain>50.0 0.0 0.1</right_steering_pid_gain>
+      <right_steering_pid_gain>5.0 0.0 0.1</right_steering_pid_gain>
       <right_steering_i_range>0 0</right_steering_i_range>
       <linear_velocity_pid_gain>5.0 0.0 0.0</linear_velocity_pid_gain>
       <linear_velocity_i_range>0 0</linear_velocity_i_range>

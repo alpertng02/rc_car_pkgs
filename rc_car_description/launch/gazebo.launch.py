@@ -6,48 +6,67 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command
 from launch_ros.actions import Node
 
+# This import is the magic fix for the YAML parsing crash!
+from launch_ros.parameter_descriptions import ParameterValue
+
 def generate_launch_description():
-    pkg_name = 'rc_car_description'
-    pkg_share = get_package_share_directory(pkg_name)
-    
-    # Process the URDF file
-    xacro_file = os.path.join(pkg_share, 'urdf', 'rc_car.xacro')
-    gazebo_params_file = os.path.join(get_package_share_directory(pkg_name),'config','gazebo_params.yaml')
-    
-    # CRITICAL: We must pass 'use_sim_time': True so ROS syncs its clock with Gazebo
-    robot_description_params = {
-        'robot_description': Command(['xacro ', xacro_file]),
-        'use_sim_time': True
-    }
 
-    # 1. Include the standard Gazebo launch file
-    gazebo = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([os.path.join(
-                get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')]),
-                launch_arguments={'extra_gazebo_args': '--ros-args --params-file ' + gazebo_params_file}.items()
-            )
+    # 1. Define package paths
+    pkg_gazebo_ros = get_package_share_directory('gazebo_ros')
+    pkg_rc_car = get_package_share_directory('rc_car_description')
+
+    # IMPORTANT: Change 'rc_car.urdf' to whatever your file is actually named 
+    # (e.g., 'rc_car.urdf.xacro' or 'robot.urdf')
+    urdf_file = os.path.join(pkg_rc_car, 'urdf', 'rc_car.xacro')
+
+    museum_world_path = pkg_rc_car = os.path.join(
+        get_package_share_directory('rc_car_description'), 'worlds', 'museum.world')
 
 
-    # 2. Start robot_state_publisher
-    node_robot_state_publisher = Node(
+    # 3. Process the URDF with Xacro AND wrap it as a pure string to prevent YAML crashes
+    robot_description_content = ParameterValue(Command(['xacro ', urdf_file]), value_type=str)
+
+    # 4. Robot State Publisher Node
+    robot_state_publisher_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
+        name='robot_state_publisher',
         output='screen',
-        parameters=[robot_description_params]
+        parameters=[{'robot_description': robot_description_content}]
     )
 
-    # 3. Spawn the robot in Gazebo
-    spawn_entity = Node(
+    # 5. Launch Gazebo Server (gzserver) with the museum World
+    gzserver = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_gazebo_ros, 'launch', 'gzserver.launch.py')
+        ),
+        launch_arguments={'world': museum_world_path}.items()
+    )
+
+    # 6. Launch Gazebo Client (gzclient) for the GUI
+    gzclient = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_gazebo_ros, 'launch', 'gzclient.launch.py')
+        )
+    )
+
+    # 7. Spawn the Car safely in the museum (x=0, y=1.0, z=0.2)
+    spawn_entity_node = Node(
         package='gazebo_ros',
         executable='spawn_entity.py',
-        arguments=['-topic', 'robot_description',
-                   '-entity', 'rc_car',
-                   '-z', '0.05'], # Drops the car slightly from the air so it settles on the ground
+        arguments=[
+            '-topic', 'robot_description',
+            '-entity', 'rc_car',
+            '-x', '0.0',
+            '-y', '1.0',
+            '-z', '0.2'
+        ],
         output='screen'
     )
 
     return LaunchDescription([
-        gazebo,
-        node_robot_state_publisher,
-        spawn_entity
+        robot_state_publisher_node,
+        gzserver,
+        gzclient,
+        spawn_entity_node
     ])
