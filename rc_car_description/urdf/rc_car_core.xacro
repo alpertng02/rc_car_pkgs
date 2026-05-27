@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+  
+  <link name="base_link">
+    <visual>
+      <origin xyz="${chassis_x_offset} 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="file://$(find rc_car_description)/meshes/rc_car_chassis_light.stl" scale="1 1 1"/>      
+      </geometry>
+      <material name="gray"/>
+    </visual>
+    <collision>
+      <origin xyz="${chassis_x_offset} 0 0.015" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.22 0.08 0.05"/> 
+      </geometry>
+    </collision>
+    <xacro:box_inertia m="1.5" w="0.12" h="0.05" d="0.25" x_offset="${chassis_x_offset}" z_offset="-0.06"/>
+  </link>
+
+  <link name="steering_wheel_link">
+    <xacro:dummy_inertia/>
+  </link>
+
+  <joint name="steering_wheel_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="steering_wheel_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="10.0" velocity="10.0"/>
+  </joint>
+
+  <xacro:macro name="rc_wheel" params="prefix mesh_rpy">
+    <link name="${prefix}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${mesh_rpy}"/> 
+        <geometry>
+          <mesh filename="file://$(find rc_car_description)/meshes/rc_car_wheel_light.stl" scale="1 1 1"/>        
+        </geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <xacro:cylinder_inertia m="0.5" r="${wheel_radius}" h="${wheel_width}"/>
+    </link>
+
+    <gazebo reference="${prefix}_wheel_link">
+      <mu1>1.2</mu1>
+      <mu2>1.2</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.001</minDepth>
+      <material>Gazebo/Black</material>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:rc_wheel prefix="rear_left" mesh_rpy="-${M_PI/2.0} 0 0"/>
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_left_wheel_link"/>
+    <origin xyz="0 ${track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/> 
+    <axis xyz="0 0 1"/>
+    <limit effort="5.0" velocity="100.0"/> 
+    <dynamics damping="0.001" friction="0.05"/>
+  </joint>
+
+  <xacro:rc_wheel prefix="rear_right" mesh_rpy="${M_PI/2.0} 0 0"/>
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="rear_right_wheel_link"/>
+    <origin xyz="0 ${-track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="5.0" velocity="100.0"/> 
+    <dynamics damping="0.001" friction="0.05"/>
+  </joint>
+
+  <xacro:macro name="front_steer_assembly" params="prefix y_offset mesh_rpy">
+    <link name="${prefix}_steer_link">
+      <xacro:dummy_inertia/>
+    </link>
+
+    <joint name="${prefix}_steer_joint" type="revolute">
+      <parent link="base_link"/>
+      <child link="${prefix}_steer_link"/>
+      <origin xyz="${wheelbase} ${y_offset} 0" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/> 
+      <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="100.0" velocity="2.0"/>
+      <dynamics damping="0.001" friction="0.05"/>
+    </joint>
+
+    <xacro:rc_wheel prefix="${prefix}" mesh_rpy="${mesh_rpy}"/>
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="${prefix}_steer_link"/>
+      <child link="${prefix}_wheel_link"/>
+      <origin xyz="0 0 0" rpy="-${M_PI/2.0} 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit effort="5.0" velocity="100.0"/> 
+      <dynamics damping="0.001" friction="0.05"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:front_steer_assembly prefix="front_left" y_offset="${track_width/2}" mesh_rpy="-${M_PI/2.0} 0 0"/>
+  <xacro:front_steer_assembly prefix="front_right" y_offset="-${track_width/2}" mesh_rpy="${M_PI/2.0} 0 0"/>
+
+</robot>

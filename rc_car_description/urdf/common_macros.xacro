@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="pkg_name" value="rc_car_description"/>
+  <xacro:property name="wheelbase" value="0.1688"/>   
+  <xacro:property name="chassis_x_offset" value="0.094"/> 
+  <xacro:property name="track_width" value="0.162"/> 
+  <xacro:property name="wheel_radius" value="0.03"/>
+  <xacro:property name="wheel_width" value="0.03"/>
+  <xacro:property name="max_steer_angle" value="0.523"/> 
+  <xacro:property name="M_PI" value="3.1415926535897931" />
+
+  <xacro:macro name="box_inertia" params="m w h d x_offset z_offset">
+    <inertial>
+      <origin xyz="${x_offset} 0 ${z_offset}" rpy="0 0 0"/>
+      <mass value="${m}"/>
+      <inertia ixx="${(m/12) * (h*h + d*d)}" ixy="0.0" ixz="0.0" iyy="${(m/12) * (w*w + d*d)}" iyz="0.0" izz="${(m/12) * (w*w + h*h)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="${m}"/>
+      <inertia ixx="${(m/12) * (3*r*r + h*h)}" ixy="0" ixz="0" iyy="${(m/12) * (3*r*r + h*h)}" iyz="0" izz="${(m/2) * (r*r)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="dummy_inertia">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.1"/>
+      <inertia ixx="1e-3" ixy="0" ixz="0" iyy="1e-3" iyz="0" izz="1e-3"/>
+    </inertial>
+  </xacro:macro>
+
+  <material name="gray"><color rgba="0.5 0.5 0.5 1.0"/></material>
+  <material name="black"><color rgba="0.1 0.1 0.1 1.0"/></material>
+  <material name="black_lidar"><color rgba="0 0 0 1" /></material>
+  <material name="lipo_blue"><color rgba="0.1 0.5 0.8 1" /></material>
+  <material name="green_pcb"><color rgba="0 0.5 0 1" /></material>
+
+</robot>
