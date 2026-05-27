@@ -47,7 +47,7 @@
     <visual>
       <origin xyz="${chassis_x_offset} 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find rc_car_description)/meshes/rc_car_chassis.stl" scale="1 1 1"/>      
+        <mesh filename="file://$(find rc_car_description)/meshes/rc_car_chassis_light.stl" scale="1 1 1"/>      
       </geometry>
       <material name="gray">
         <color rgba="0.5 0.5 0.5 1.0"/>
@@ -80,7 +80,7 @@
       <visual>
         <origin xyz="0 0 0" rpy="${mesh_rpy}"/> 
         <geometry>
-          <mesh filename="file://$(find rc_car_description)/meshes/rc_car_wheel.stl" scale="1 1 1"/>        
+          <mesh filename="file://$(find rc_car_description)/meshes/rc_car_wheel_light.stl" scale="1 1 1"/>        
         </geometry>
         <material name="black">
           <color rgba="0.1 0.1 0.1 1.0"/>
@@ -189,11 +189,11 @@
     <sensor name="laser" type="ray">
       <pose> 0 0 0 0 0 0 </pose>
       <visualize>true</visualize>
-      <update_rate>5.5</update_rate>
+      <update_rate>10.0</update_rate>
       <ray>
         <scan>
           <horizontal>
-            <samples>363</samples>
+            <samples>360</samples>
             <resolution>1</resolution>
             <min_angle>${-M_PI}</min_angle>
             <max_angle>${M_PI}</max_angle>
@@ -207,7 +207,7 @@
         <noise>
           <type>gaussian</type>
           <mean>0.0</mean>
-          <stddev>0.01</stddev>
+          <stddev>0.012</stddev>
         </noise>
       </ray>
       <plugin name="laser_controller" filename="libgazebo_ros_ray_sensor.so">

@@ -1,12 +1,11 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command
+from launch.substitutions import Command, LaunchConfiguration
+from launch.conditions import IfCondition
 from launch_ros.actions import Node
-
-# This import is the magic fix for the YAML parsing crash!
 from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
@@ -15,15 +14,29 @@ def generate_launch_description():
     pkg_gazebo_ros = get_package_share_directory('gazebo_ros')
     pkg_rc_car = get_package_share_directory('rc_car_description')
 
-    # IMPORTANT: Change 'rc_car.urdf' to whatever your file is actually named 
-    # (e.g., 'rc_car.urdf.xacro' or 'robot.urdf')
     urdf_file = os.path.join(pkg_rc_car, 'urdf', 'rc_car.xacro')
+    museum_world_path = os.path.join(pkg_rc_car, 'worlds', 'museum.world')
+    
+    # NEW: Path to your RViz config file (update the filename if yours is different)
+    rviz_config_path = os.path.join(pkg_rc_car, 'rviz', 'rc_car.rviz')
+    
+    slam_config_path = os.path.join(pkg_rc_car, 'config', 'mapper_params_online_async.yaml')
+    
+    # 2. Declare Launch Arguments
+    # This allows you to run: ros2 launch rc_car_description launch.py use_rviz:=false
+    use_rviz_arg = DeclareLaunchArgument(
+        'use_rviz',
+        default_value='true',
+        description='Whether to start RViz2'
+    )
 
-    museum_world_path = pkg_rc_car = os.path.join(
-        get_package_share_directory('rc_car_description'), 'worlds', 'museum.world')
+    use_slam_arg = DeclareLaunchArgument(
+        'use_slam',
+        default_value='false', # Set to false by default so it doesn't run unless requested
+        description='Whether to start slam_toolbox'
+    )
 
-
-    # 3. Process the URDF with Xacro AND wrap it as a pure string to prevent YAML crashes
+    # 3. Process the URDF with Xacro
     robot_description_content = ParameterValue(Command(['xacro ', urdf_file]), value_type=str)
 
     # 4. Robot State Publisher Node
@@ -35,7 +48,7 @@ def generate_launch_description():
         parameters=[{'robot_description': robot_description_content}]
     )
 
-    # 5. Launch Gazebo Server (gzserver) with the museum World
+    # 5. Launch Gazebo Server (gzserver)
     gzserver = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_gazebo_ros, 'launch', 'gzserver.launch.py')
@@ -50,23 +63,49 @@ def generate_launch_description():
         )
     )
 
-    # 7. Spawn the Car safely in the museum (x=0, y=1.0, z=0.2)
+    # 7. Spawn the Car in Gazebo
     spawn_entity_node = Node(
         package='gazebo_ros',
         executable='spawn_entity.py',
         arguments=[
             '-topic', 'robot_description',
             '-entity', 'rc_car',
-            '-x', '0.0',
-            '-y', '1.0',
-            '-z', '0.2'
-        ],
+            '-x', '0.0', '-y', '0.0', '-z', '0.0',
+            '-R', '0.0', '-P', '0.0', '-Y', '-1.57',
+            '-timeout', '120.0' # <-- Tell the script to wait up to 120 seconds
+         ],
         output='screen'
     )
 
+    # 8. NEW: RViz Node with Condition
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='screen',
+        arguments=['-d', rviz_config_path],
+        condition=IfCondition(LaunchConfiguration('use_rviz'))
+    )
+
+    slam_toolbox_node = Node(
+        package='slam_toolbox',
+        executable='async_slam_toolbox_node',
+        name='slam_toolbox',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('use_slam')),
+        parameters=[
+            slam_config_path,          # Load the YAML file first
+            {'use_sim_time': True}     # Then override with use_sim_time for Gazebo
+        ]
+    )
+
     return LaunchDescription([
+        use_rviz_arg,
+        use_slam_arg,
         robot_state_publisher_node,
         gzserver,
         gzclient,
-        spawn_entity_node
+        spawn_entity_node,
+        rviz_node,
+        slam_toolbox_node
     ])
