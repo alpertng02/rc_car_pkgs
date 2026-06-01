@@ -25,18 +25,20 @@
     </collision>
     <xacro:box_inertia m="1.5" w="0.12" h="0.05" d="0.25" x_offset="${chassis_x_offset}" z_offset="-0.06"/>
   </link>
-
+  
+<!-- 
   <link name="steering_wheel_link">
     <xacro:dummy_inertia/>
   </link>
 
-  <joint name="steering_wheel_joint" type="revolute">
+<joint name="steering_wheel_joint" type="revolute">
     <parent link="base_link"/>
     <child link="steering_wheel_link"/>
     <origin xyz="0 0 0" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
     <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="10.0" velocity="10.0"/>
   </joint>
+-->
 
   <xacro:macro name="rc_wheel" params="prefix mesh_rpy">
     <link name="${prefix}_wheel_link">
