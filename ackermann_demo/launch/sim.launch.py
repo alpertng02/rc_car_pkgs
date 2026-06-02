@@ -11,7 +11,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     pkg_path = get_package_share_directory('ackermann_demo')
-    
+    rviz_config_path = os.path.join(pkg_path, 'rviz', 'view_robot.rviz')
     # Process the Xacro file into clean URDF string
     xacro_file = os.path.join(pkg_path, 'urdf', 'car.urdf.xacro')
     robot_description_config = xacro.process_file(xacro_file)
@@ -23,6 +23,12 @@ def generate_launch_description():
         'controller_ps4',
         default_value='false',
         description='Whether to start the SDL2 game controller teleop stack'
+    )
+    
+    use_rviz_arg = DeclareLaunchArgument(
+        'use_rviz',
+        default_value='true',
+        description='Whether to start RViz2'
     )
     
     # Robot State Publisher Node
@@ -77,8 +83,19 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('controller_ps4')),
         parameters=[ps4_config_path, {'use_sim_time': True}]
     )
+    
+    rviz_node = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        output='screen',
+        arguments=['-d', rviz_config_path],
+        parameters=[{'use_sim_time': True}],
+        condition=IfCondition(LaunchConfiguration('use_rviz'))
+    )
 
     return LaunchDescription([
+        use_rviz_arg,
         controller_ps4_arg,
         robot_state_publisher,
         gazebo,
@@ -86,5 +103,6 @@ def generate_launch_description():
         joint_state_broadcaster_spawner,
         ackermann_steering_controller_spawner,
         game_controller_node,
-        teleop_twist_joy_node
+        teleop_twist_joy_node,
+        rviz_node
     ])

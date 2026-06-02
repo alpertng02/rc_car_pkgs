@@ -8,23 +8,23 @@
 
   <link name="chassis">
     <visual>
-      <geometry> <box size="1.5 0.6 0.3"/> </geometry>
+      <geometry> <box size="0.22 0.08 0.05"/> </geometry>
       <material name="blue"/>
     </visual>
     <collision>
-      <geometry> <box size="1.5 0.6 0.3"/> </geometry>
+      <geometry> <box size="0.22 0.08 0.05"/> </geometry>
     </collision>
     <inertial>
-      <mass value="20.0"/>
+      <mass value="2.0"/>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <inertia ixx="0.75" ixy="0.0" ixz="0.0" iyy="4.35" iyz="0.0" izz="4.35"/>
+      <inertia ixx="0.001483" ixy="0.0" ixz="0.0" iyy="0.008483" iyz="0.0" izz="0.009133"/>
     </inertial>
   </link>
 
   <joint name="chassis_joint" type="fixed">
     <parent link="base_link"/>
     <child link="chassis"/>
-    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
   </joint>
 
   <xacro:macro name="wheel_inertial" params="mass radius length">
@@ -39,70 +39,70 @@
   <link name="rear_left_wheel">
     <visual>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
-      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <geometry> <cylinder radius="0.03" length="0.03"/> </geometry>
       <material name="black"/>
     </visual>
     <collision>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
-      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <geometry> <cylinder radius="0.03" length="0.03"/> </geometry>
     </collision>
-    <xacro:wheel_inertial mass="5.0" radius="0.2" length="0.1"/>
+    <xacro:wheel_inertial mass="0.1" radius="0.03" length="0.03"/>
   </link>
 
   <joint name="rear_left_wheel_joint" type="continuous">
     <parent link="chassis"/>
     <child link="rear_left_wheel"/>
-    <origin xyz="-0.5 0.35 -0.1" rpy="0 0 0"/>
+    <origin xyz="-0.08 0.055 -0.02" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
   </joint>
 
   <link name="rear_right_wheel">
     <visual>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
-      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <geometry> <cylinder radius="0.03" length="0.03"/> </geometry>
       <material name="black"/>
     </visual>
     <collision>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
-      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <geometry> <cylinder radius="0.03" length="0.03"/> </geometry>
     </collision>
-    <xacro:wheel_inertial mass="5.0" radius="0.2" length="0.1"/>
+    <xacro:wheel_inertial mass="0.1" radius="0.03" length="0.03"/>
   </link>
 
   <joint name="rear_right_wheel_joint" type="continuous">
     <parent link="chassis"/>
     <child link="rear_right_wheel"/>
-    <origin xyz="-0.5 -0.35 -0.1" rpy="0 0 0"/>
+    <origin xyz="-0.08 -0.055 -0.02" rpy="0 0 0"/>
     <axis xyz="0 1 0"/>
   </joint>
 
   <link name="front_left_steer">
     <inertial>
-      <mass value="1.0"/>
-      <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+      <mass value="0.02"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
     </inertial>
   </link>
 
   <joint name="front_left_steering_joint" type="revolute">
     <parent link="chassis"/>
     <child link="front_left_steer"/>
-    <origin xyz="0.5 0.35 -0.1" rpy="0 0 0"/>
+    <origin xyz="0.08 0.055 -0.02" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-0.6" upper="0.6" effort="200.0" velocity="4.0"/>
-    <dynamics damping="2.0" friction="0.3"/> 
+    <limit lower="-0.5236" upper="0.5236" effort="20.0" velocity="4.0"/>
+    <dynamics damping="0.1" friction="0.02"/> 
   </joint>
 
   <link name="front_left_wheel">
     <visual>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
-      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <geometry> <cylinder radius="0.03" length="0.03"/> </geometry>
       <material name="black"/>
     </visual>
     <collision>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
-      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <geometry> <cylinder radius="0.03" length="0.03"/> </geometry>
     </collision>
-    <xacro:wheel_inertial mass="5.0" radius="0.2" length="0.1"/>
+    <xacro:wheel_inertial mass="0.1" radius="0.03" length="0.03"/>
   </link>
 
   <joint name="front_left_wheel_joint" type="continuous">
@@ -114,31 +114,31 @@
 
   <link name="front_right_steer">
     <inertial>
-      <mass value="1.0"/>
-      <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+      <mass value="0.02"/>
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
     </inertial>
   </link>
 
   <joint name="front_right_steering_joint" type="revolute">
     <parent link="chassis"/>
     <child link="front_right_steer"/>
-    <origin xyz="0.5 -0.35 -0.1" rpy="0 0 0"/>
+    <origin xyz="0.08 -0.055 -0.02" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-0.6" upper="0.6" effort="200.0" velocity="4.0"/>
-    <dynamics damping="2.0" friction="0.3"/> 
+    <limit lower="-0.5236" upper="0.5236" effort="20.0" velocity="4.0"/>
+    <dynamics damping="0.1" friction="0.02"/>
   </joint>
 
   <link name="front_right_wheel">
     <visual>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
-      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <geometry> <cylinder radius="0.03" length="0.03"/> </geometry>
       <material name="black"/>
     </visual>
     <collision>
       <origin rpy="1.5708 0 0" xyz="0 0 0"/>
-      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <geometry> <cylinder radius="0.03" length="0.03"/> </geometry>
     </collision>
-    <xacro:wheel_inertial mass="5.0" radius="0.2" length="0.1"/>
+    <xacro:wheel_inertial mass="0.1" radius="0.03" length="0.03"/>
   </link>
 
   <joint name="front_right_wheel_joint" type="continuous">
@@ -152,7 +152,6 @@
     <hardware>
       <plugin>gazebo_ros2_control/GazeboSystem</plugin>
     </hardware>
-    
     <joint name="rear_left_wheel_joint">
       <command_interface name="velocity"/>
       <state_interface name="position"/>
@@ -163,7 +162,6 @@
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
-
     <joint name="front_left_steering_joint">
       <command_interface name="position"/>
       <state_interface name="position"/>
@@ -195,27 +193,15 @@
   </gazebo>
 
   <gazebo reference="front_left_wheel">
-    <mu1>1.5</mu1>
-    <mu2>1.5</mu2>
-    <kp>1000000.0</kp>
-    <kd>100.0</kd>
+    <mu1>1.5</mu1> <mu2>1.5</mu2> <kp>1000000.0</kp> <kd>100.0</kd>
   </gazebo>
   <gazebo reference="front_right_wheel">
-    <mu1>1.5</mu1>
-    <mu2>1.5</mu2>
-    <kp>1000000.0</kp>
-    <kd>100.0</kd>
+    <mu1>1.5</mu1> <mu2>1.5</mu2> <kp>1000000.0</kp> <kd>100.0</kd>
   </gazebo>
   <gazebo reference="rear_left_wheel">
-    <mu1>1.5</mu1>
-    <mu2>1.5</mu2>
-    <kp>1000000.0</kp>
-    <kd>100.0</kd>
+    <mu1>1.5</mu1> <mu2>1.5</mu2> <kp>1000000.0</kp> <kd>100.0</kd>
   </gazebo>
   <gazebo reference="rear_right_wheel">
-    <mu1>1.5</mu1>
-    <mu2>1.5</mu2>
-    <kp>1000000.0</kp>
-    <kd>100.0</kd>
+    <mu1>1.5</mu1> <mu2>1.5</mu2> <kp>1000000.0</kp> <kd>100.0</kd>
   </gazebo>
 </robot>

@@ -27,8 +27,8 @@ ackermann_steering_controller:
     front_wheels_names: ["front_right_steering_joint", "front_left_steering_joint"]
     
     # Kinematics specifications (Must precisely match URDF offsets)
-    wheelbase: 1.0            # Distance between rear and front axes
-    front_wheel_track: 0.7    # Distance between front steering pivots
-    rear_wheel_track: 0.7     # Distance between rear wheels
-    front_wheels_radius: 0.2
-    rear_wheels_radius: 0.2
+    wheelbase: 0.16           # Distance front-to-back (0.08 - (-0.08))
+    front_wheel_track: 0.11   # Distance between steering knuckles (0.055 - (-0.055))
+    rear_wheel_track: 0.11    # Distance between rear wheels
+    front_wheels_radius: 0.03 # 3cm radius
+    rear_wheels_radius: 0.03  # 3cm radius
