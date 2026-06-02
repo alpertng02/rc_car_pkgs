@@ -1,0 +1,34 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100
+    use_sim_time: true
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    ackermann_steering_controller:
+      type: ackermann_steering_controller/AckermannSteeringController
+
+ackermann_steering_controller:
+  ros__parameters:
+    use_sim_time: true
+    reference_timeout: 2.0
+    front_steering: true
+    open_loop: false
+    position_feedback: true
+    use_stamped_vel: true
+    
+    odom_frame_id: odom
+    base_frame_id: base_link
+    enable_odom_tf: true
+
+    # Map the controller to our URDF joints
+    rear_wheels_names: ["rear_right_wheel_joint", "rear_left_wheel_joint"]
+    front_wheels_names: ["front_right_steering_joint", "front_left_steering_joint"]
+    
+    # Kinematics specifications (Must precisely match URDF offsets)
+    wheelbase: 1.0            # Distance between rear and front axes
+    front_wheel_track: 0.7    # Distance between front steering pivots
+    rear_wheel_track: 0.7     # Distance between rear wheels
+    front_wheels_radius: 0.2
+    rear_wheels_radius: 0.2

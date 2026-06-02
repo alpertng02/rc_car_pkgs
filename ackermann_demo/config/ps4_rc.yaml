@@ -1,0 +1,17 @@
+teleop_twist_joy_node:
+  ros__parameters:
+    axis_linear:
+      x: 1             # Left stick vertical axis for speed
+    scale_linear:
+      x: 5.0           # Maximum velocity (m/s)
+    axis_angular:
+      z: 0             # Right stick horizontal axis for steering
+    scale_angular:
+      z: 0.6           # Maximum steering angle (rad)
+      
+    # --- BUTTONS ---
+    # 0=Cross, 1=Circle, 2=Triangle, 3=Square, 9=L1, 10=R1
+    enable_button: 9        # Hold L1 to drive normally
+    enable_turbo_button: 10  # Hold R1 to unlock turbo speed
+
+    publish_stamped_twist: true

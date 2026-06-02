@@ -1,0 +1,221 @@
+<?xml version="1.0"?>
+<robot name="four_wheeled_car" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <material name="blue"> <color rgba="0.1 0.1 0.8 1.0"/> </material>
+  <material name="black"> <color rgba="0.0 0.0 0.0 1.0"/> </material>
+
+  <link name="base_link"/>
+
+  <link name="chassis">
+    <visual>
+      <geometry> <box size="1.5 0.6 0.3"/> </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <geometry> <box size="1.5 0.6 0.3"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="20.0"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.75" ixy="0.0" ixz="0.0" iyy="4.35" iyz="0.0" izz="4.35"/>
+    </inertial>
+  </link>
+
+  <joint name="chassis_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="chassis"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:macro name="wheel_inertial" params="mass radius length">
+    <inertial>
+      <mass value="${mass}"/>
+      <inertia ixx="${(1/12)*mass*(3*radius*radius + length*length)}" ixy="0.0" ixz="0.0"
+               iyy="${(1/12)*mass*(3*radius*radius + length*length)}" iyz="0.0"
+               izz="${0.5*mass*radius*radius}"/>
+    </inertial>
+  </xacro:macro>
+
+  <link name="rear_left_wheel">
+    <visual>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+    </collision>
+    <xacro:wheel_inertial mass="5.0" radius="0.2" length="0.1"/>
+  </link>
+
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <parent link="chassis"/>
+    <child link="rear_left_wheel"/>
+    <origin xyz="-0.5 0.35 -0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <link name="rear_right_wheel">
+    <visual>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+    </collision>
+    <xacro:wheel_inertial mass="5.0" radius="0.2" length="0.1"/>
+  </link>
+
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <parent link="chassis"/>
+    <child link="rear_right_wheel"/>
+    <origin xyz="-0.5 -0.35 -0.1" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <link name="front_left_steer">
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="front_left_steering_joint" type="revolute">
+    <parent link="chassis"/>
+    <child link="front_left_steer"/>
+    <origin xyz="0.5 0.35 -0.1" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.6" upper="0.6" effort="200.0" velocity="4.0"/>
+    <dynamics damping="2.0" friction="0.3"/> 
+  </joint>
+
+  <link name="front_left_wheel">
+    <visual>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+    </collision>
+    <xacro:wheel_inertial mass="5.0" radius="0.2" length="0.1"/>
+  </link>
+
+  <joint name="front_left_wheel_joint" type="continuous">
+    <parent link="front_left_steer"/>
+    <child link="front_left_wheel"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <link name="front_right_steer">
+    <inertial>
+      <mass value="1.0"/>
+      <inertia ixx="0.01" ixy="0.0" ixz="0.0" iyy="0.01" iyz="0.0" izz="0.01"/>
+    </inertial>
+  </link>
+
+  <joint name="front_right_steering_joint" type="revolute">
+    <parent link="chassis"/>
+    <child link="front_right_steer"/>
+    <origin xyz="0.5 -0.35 -0.1" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-0.6" upper="0.6" effort="200.0" velocity="4.0"/>
+    <dynamics damping="2.0" friction="0.3"/> 
+  </joint>
+
+  <link name="front_right_wheel">
+    <visual>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+      <geometry> <cylinder radius="0.2" length="0.1"/> </geometry>
+    </collision>
+    <xacro:wheel_inertial mass="5.0" radius="0.2" length="0.1"/>
+  </link>
+
+  <joint name="front_right_wheel_joint" type="continuous">
+    <parent link="front_right_steer"/>
+    <child link="front_right_wheel"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    
+    <joint name="rear_left_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="rear_right_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="front_left_steering_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="front_right_steering_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <gazebo>
+    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <parameters>$(find ackermann_demo)/config/controllers.yaml</parameters>
+      <ros>
+        <remapping>/ackermann_steering_controller/tf_odometry:=/tf</remapping>
+        <remapping>/ackermann_steering_controller/reference:=/cmd_vel</remapping>
+        <remapping>/ackermann_steering_controller/odometry:=/odom</remapping>
+      </ros>
+    </plugin>
+  </gazebo>
+
+  <gazebo reference="front_left_steering_joint">
+    <implicitSpringDamper>true</implicitSpringDamper>
+  </gazebo>
+  <gazebo reference="front_right_steering_joint">
+    <implicitSpringDamper>true</implicitSpringDamper>
+  </gazebo>
+
+  <gazebo reference="front_left_wheel">
+    <mu1>1.5</mu1>
+    <mu2>1.5</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="front_right_wheel">
+    <mu1>1.5</mu1>
+    <mu2>1.5</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="rear_left_wheel">
+    <mu1>1.5</mu1>
+    <mu2>1.5</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="rear_right_wheel">
+    <mu1>1.5</mu1>
+    <mu2>1.5</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+</robot>

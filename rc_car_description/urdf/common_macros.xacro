@@ -14,7 +14,9 @@
     <inertial>
       <origin xyz="${x_offset} 0 ${z_offset}" rpy="0 0 0"/>
       <mass value="${m}"/>
-      <inertia ixx="${(m/12) * (h*h + d*d)}" ixy="0.0" ixz="0.0" iyy="${(m/12) * (w*w + d*d)}" iyz="0.0" izz="${(m/12) * (w*w + h*h)}"/>
+      <inertia ixx="${(m/12) * (w*w + h*h)}" ixy="0.0" ixz="0.0" 
+               iyy="${(m/12) * (d*d + h*h)}" iyz="0.0" 
+               izz="${(m/12) * (d*d + w*w)}"/>
     </inertial>
   </xacro:macro>
 
@@ -22,15 +24,23 @@
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <mass value="${m}"/>
-      <inertia ixx="${(m/12) * (3*r*r + h*h)}" ixy="0" ixz="0" iyy="${(m/12) * (3*r*r + h*h)}" iyz="0" izz="${(m/2) * (r*r)}"/>
+      <inertia ixx="${(m/12) * (3*r*r + h*h)}" ixy="0" ixz="0" 
+               iyy="${(m/12) * (3*r*r + h*h)}" iyz="0" 
+               izz="${(m/2) * (r*r)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="steering_knuckle_inertia">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.015"/> <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
     </inertial>
   </xacro:macro>
 
   <xacro:macro name="dummy_inertia">
     <inertial>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <mass value="0.1"/>
-      <inertia ixx="1e-3" ixy="0" ixz="0" iyy="1e-3" iyz="0" izz="1e-3"/>
+      <mass value="0.01"/> <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/>
     </inertial>
   </xacro:macro>
 

@@ -23,7 +23,7 @@
         <box size="0.22 0.08 0.05"/> 
       </geometry>
     </collision>
-    <xacro:box_inertia m="1.5" w="0.12" h="0.05" d="0.25" x_offset="${chassis_x_offset}" z_offset="-0.06"/>
+    <xacro:box_inertia m="1.5" w="0.12" h="0.05" d="0.25" x_offset="${chassis_x_offset}" z_offset="0.015"/>
   </link>
   
 <!-- 
@@ -55,14 +55,14 @@
           <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
         </geometry>
       </collision>
-      <xacro:cylinder_inertia m="0.5" r="${wheel_radius}" h="${wheel_width}"/>
+      <xacro:cylinder_inertia m="0.05" r="${wheel_radius}" h="${wheel_width}"/>
     </link>
 
     <gazebo reference="${prefix}_wheel_link">
-      <mu1>1.2</mu1>
-      <mu2>1.2</mu2>
-      <kp>1000000.0</kp>
-      <kd>100.0</kd>
+      <mu1>1.0</mu1>
+      <mu2>1.0</mu2>
+      <kp>10000000.0</kp>
+      <kd>1.0</kd>
       <minDepth>0.001</minDepth>
       <material>Gazebo/Black</material>
     </gazebo>
@@ -74,8 +74,8 @@
     <child link="rear_left_wheel_link"/>
     <origin xyz="0 ${track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/> 
     <axis xyz="0 0 1"/>
-    <limit effort="5.0" velocity="100.0"/> 
-    <dynamics damping="0.001" friction="0.05"/>
+    <limit effort="10.0" velocity="100.0"/> 
+    <dynamics damping="0.01" friction="0.05"/>
   </joint>
 
   <xacro:rc_wheel prefix="rear_right" mesh_rpy="${M_PI/2.0} 0 0"/>
@@ -84,8 +84,8 @@
     <child link="rear_right_wheel_link"/>
     <origin xyz="0 ${-track_width/2} 0" rpy="-${M_PI/2.0} 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit effort="5.0" velocity="100.0"/> 
-    <dynamics damping="0.001" friction="0.05"/>
+    <limit effort="10.0" velocity="100.0"/> 
+    <dynamics damping="0.01" friction="0.05"/>
   </joint>
 
   <xacro:macro name="front_steer_assembly" params="prefix y_offset mesh_rpy">
@@ -99,7 +99,7 @@
       <origin xyz="${wheelbase} ${y_offset} 0" rpy="0 0 0"/>
       <axis xyz="0 0 1"/> 
       <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="100.0" velocity="2.0"/>
-      <dynamics damping="0.001" friction="0.05"/>
+      <dynamics damping="0.1" friction="0.01"/>
     </joint>
 
     <xacro:rc_wheel prefix="${prefix}" mesh_rpy="${mesh_rpy}"/>
@@ -109,7 +109,7 @@
       <origin xyz="0 0 0" rpy="-${M_PI/2.0} 0 0"/>
       <axis xyz="0 0 1"/>
       <limit effort="5.0" velocity="100.0"/> 
-      <dynamics damping="0.001" friction="0.05"/>
+      <dynamics damping="0.0" friction="0.0"/>
     </joint>
   </xacro:macro>
 
