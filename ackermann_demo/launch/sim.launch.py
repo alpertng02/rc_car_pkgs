@@ -12,17 +12,27 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description():
     pkg_path = get_package_share_directory('ackermann_demo')
     rviz_config_path = os.path.join(pkg_path, 'rviz', 'view_robot.rviz')
+    slam_config_path = os.path.join(pkg_path, 'config', 'mapper_params_online_async.yaml')
+
+    # ADDED: Locate the target environment world asset file path
+    world_path = os.path.join(pkg_path, 'worlds', 'museum.world')
+
     # Process the Xacro file into clean URDF string
     xacro_file = os.path.join(pkg_path, 'urdf', 'car.urdf.xacro')
     robot_description_config = xacro.process_file(xacro_file)
     robot_desc = {'robot_description': robot_description_config.toxml()}
     ps4_config_path = os.path.join(pkg_path, 'config', 'ps4_rc.yaml')
 
-    
     controller_ps4_arg = DeclareLaunchArgument(
         'controller_ps4',
         default_value='false',
         description='Whether to start the SDL2 game controller teleop stack'
+    )
+    
+    use_slam_arg = DeclareLaunchArgument(
+        'use_slam',
+        default_value='false',
+        description='Whether to start slam_toolbox'
     )
     
     use_rviz_arg = DeclareLaunchArgument(
@@ -40,9 +50,11 @@ def generate_launch_description():
     )
     
     # Include Gazebo Classic Launch Script
+    # UPDATED: Injected the world parameter configuration mapping array directly here
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(
             get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')]),
+        launch_arguments={'world': world_path}.items()
     )
     
     # Spawn the Robot Entity into Gazebo
@@ -84,6 +96,18 @@ def generate_launch_description():
         parameters=[ps4_config_path, {'use_sim_time': True}]
     )
     
+    slam_toolbox_node = Node(
+        package='slam_toolbox',
+        executable='async_slam_toolbox_node',
+        name='slam_toolbox',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('use_slam')),
+        parameters=[
+            slam_config_path,
+            {'use_sim_time': True}
+        ]
+    )
+    
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
@@ -96,6 +120,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         use_rviz_arg,
+        use_slam_arg,
         controller_ps4_arg,
         robot_state_publisher,
         gazebo,
@@ -104,5 +129,6 @@ def generate_launch_description():
         ackermann_steering_controller_spawner,
         game_controller_node,
         teleop_twist_joy_node,
-        rviz_node
+        rviz_node,
+        slam_toolbox_node
     ])
