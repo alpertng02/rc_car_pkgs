@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <joint name="rear_left_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="rear_right_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="front_left_steering_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="front_right_steering_joint">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <gazebo>
+    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <parameters>$(find ackermann_demo)/config/controllers.yaml</parameters>
+      <ros>
+        <remapping>/ackermann_steering_controller/tf_odometry:=/tf</remapping>
+        <remapping>/ackermann_steering_controller/reference:=/cmd_vel</remapping>
+        <remapping>/ackermann_steering_controller/odometry:=/odom</remapping>
+      </ros>
+    </plugin>
+  </gazebo>
+
+  <gazebo reference="front_left_steering_joint">
+    <implicitSpringDamper>true</implicitSpringDamper>
+  </gazebo>
+  <gazebo reference="front_right_steering_joint">
+    <implicitSpringDamper>true</implicitSpringDamper>
+  </gazebo>
+
+  <gazebo reference="front_left_wheel">
+    <mu1>1.5</mu1> <mu2>1.5</mu2> <kp>1000000.0</kp> <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="front_right_wheel">
+    <mu1>1.5</mu1> <mu2>1.5</mu2> <kp>1000000.0</kp> <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="rear_left_wheel">
+    <mu1>1.5</mu1> <mu2>1.5</mu2> <kp>1000000.0</kp> <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="rear_right_wheel">
+    <mu1>1.5</mu1> <mu2>1.5</mu2> <kp>1000000.0</kp> <kd>100.0</kd>
+  </gazebo>
+
+</robot>

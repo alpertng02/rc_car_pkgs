@@ -3,7 +3,7 @@ teleop_twist_joy_node:
     axis_linear:
       x: 1             # Left stick vertical axis for speed
     scale_linear:
-      x: 5.0           # Maximum velocity (m/s)
+      x: 3.0           # Maximum velocity (m/s)
     axis_angular:
       z: 0             # Right stick horizontal axis for steering
     scale_angular:

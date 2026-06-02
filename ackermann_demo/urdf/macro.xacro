@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="wheel_inertial" params="mass radius length">
+    <inertial>
+      <mass value="${mass}"/>
+      <inertia ixx="${(1/12)*mass*(3*radius*radius + length*length)}" ixy="0.0" ixz="0.0"
+               iyy="${(1/12)*mass*(3*radius*radius + length*length)}" iyz="0.0"
+               izz="${0.5*mass*radius*radius}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="rc_wheel_link" params="name radius length">
+    <link name="${name}">
+      <visual>
+        <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+        <geometry>
+          <mesh filename="file://$(find ackermann_demo)/meshes/rc_car_wheel_light.stl" scale="1 1 1"/>    
+        </geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin rpy="1.5708 0 0" xyz="0 0 0"/>
+        <geometry> <cylinder radius="${radius}" length="${length}"/> </geometry>
+      </collision>
+      <xacro:wheel_inertial mass="0.1" radius="${radius}" length="${length}"/>
+    </link>
+  </xacro:macro>
+
+  <xacro:macro name="front_steer_assembly" params="prefix y_offset mirror">
+    <link name="${prefix}_steer">
+      <inertial>
+        <mass value="0.02"/>
+        <inertia ixx="0.0000004" ixy="0.0" ixz="0.0" iyy="0.0000004" iyz="0.0" izz="0.0000004"/>
+      </inertial>
+    </link>
+
+    <joint name="${prefix}_steering_joint" type="revolute">
+      <parent link="chassis"/>
+      <child link="${prefix}_steer"/>
+      <origin xyz="${wheelbase/2} ${y_offset * mirror} -0.02" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-${max_steer_angle}" upper="${max_steer_angle}" effort="20.0" velocity="4.0"/>
+      <dynamics damping="0.1" friction="0.02"/> 
+    </joint>
+
+    <xacro:rc_wheel_link name="${prefix}_wheel" radius="${wheel_radius}" length="${wheel_width}"/>
+
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="${prefix}_steer"/>
+      <child link="${prefix}_wheel"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+</robot>
