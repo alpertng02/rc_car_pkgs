@@ -3,6 +3,7 @@
 
   <material name="lipo_blue"> <color rgba="0.0 0.0 0.8 1.0"/> </material>
   <material name="black_lidar"> <color rgba="0.1 0.1 0.1 1.0"/> </material>
+  <material name="raspberry_green"> <color rgba="0.0 0.4 0.0 1.0"/> </material>
 
   <joint name="battery_joint" type="fixed">
     <parent link="chassis"/>
@@ -85,16 +86,16 @@
       <ray>
         <scan>
           <horizontal>
-            <samples>360</samples>
+            <samples>800</samples>
             <resolution>1</resolution>
             <min_angle>${-M_PI}</min_angle>
             <max_angle>${M_PI}</max_angle>
           </horizontal>
         </scan>
         <range>
-          <min>0.2</min>
+          <min>0.15</min>
           <max>12.0</max>
-          <resolution>0.05</resolution>
+          <resolution>0.01</resolution>
         </range>
         <noise>
           <type>gaussian</type>
@@ -140,7 +141,7 @@
       <ray>
         <scan>
           <horizontal>
-            <samples>10</samples>3
+            <samples>10</samples>
             <resolution>1</resolution>
             <min_angle>-0.13</min_angle> 
             <max_angle>0.13</max_angle>  
@@ -170,6 +171,62 @@
         <output_type>sensor_msgs/Range</output_type>
         <radiation_type>ultrasound</radiation_type>
         <frame_name>ultrasonic_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="camera_link"/>
+    <origin xyz="0.1 0 0.03" rpy="0 0 0"/>
+  </joint>
+
+  <link name="camera_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.005 0.025 0.025"/>
+      </geometry>
+      <material name="raspberry_green"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry> <box size="0.005 0.025 0.025"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.005"/>
+      <inertia ixx="0.0000001" ixy="0.0" ixz="0.0" iyy="0.0000001" iyz="0.0" izz="0.0000001"/>
+    </inertial>
+  </link>
+
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_link_optical"/>
+    <origin xyz="0 0 0" rpy="-${M_PI/2} 0 -${M_PI/2}"/>
+  </joint>
+
+  <link name="camera_link_optical"/>
+
+  <gazebo reference="camera_link">
+    <material>Gazebo/Green</material>
+    <sensor name="rasppi_camera" type="camera">
+      <pose> 0 0 0 0 0 0 </pose>
+      <visualize>true</visualize>
+      <update_rate>30.0</update_rate>
+      <camera>
+        <horizontal_fov>1.085595</horizontal_fov>
+        <image>
+          <format>R8G8B8</format>
+          <width>640</width>
+          <height>480</height>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <max>8.0</max>
+        </clip>
+      </camera>
+      <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+        <frame_name>camera_link_optical</frame_name>
       </plugin>
     </sensor>
   </gazebo>
