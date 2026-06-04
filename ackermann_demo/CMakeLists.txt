@@ -10,6 +10,13 @@ find_package(ament_cmake REQUIRED)
 find_package(robot_state_publisher REQUIRED)
 find_package(urdf REQUIRED)
 find_package(xacro REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+
+add_executable(astar_planner src/astar_planner.cpp)
+ament_target_dependencies(astar_planner rclcpp nav_msgs geometry_msgs tf2_ros)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -26,6 +33,11 @@ endif()
 install(
   DIRECTORY config launch urdf rviz meshes worlds
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(TARGETS
+  astar_planner
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()

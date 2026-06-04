@@ -16,7 +16,11 @@
   <depend>gazebo_ros2_control</depend>
   <depend>ros2_control</depend>
   <depend>ros2_controllers</depend>
-
+  <depend>rclcpp</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
