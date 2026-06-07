@@ -5,7 +5,7 @@
   <xacro:property name="wheelbase" value="0.1688"/>   
   <xacro:property name="track_width" value="0.162"/> 
   <xacro:property name="wheel_radius" value="0.03"/>
-  <xacro:property name="wheel_width" value="0.03"/>
+  <xacro:property name="wheel_width" value="0.0275"/>
   <xacro:property name="max_steer_angle" value="0.523"/> 
   <xacro:property name="M_PI" value="3.1415926535897931" />
 

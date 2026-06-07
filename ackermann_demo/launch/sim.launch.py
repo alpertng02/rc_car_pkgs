@@ -74,6 +74,19 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}], 
         condition=IfCondition(LaunchConfiguration('use_nav')) 
     )
+    
+    costmap_node = Node(
+        package='ackermann_demo',
+        executable='costmap_node',
+        name='costmap_node',
+        output='screen',
+        parameters=[{
+            'use_sim_time': True,
+            'robot_radius': 0.22,    
+            'safety_margin': 0.25    
+        }],
+        condition=IfCondition(LaunchConfiguration('use_nav'))
+    )
 
     rviz_node = Node(
         package='rviz2', executable='rviz2', name='rviz2', arguments=['-d', rviz_config_path],
@@ -85,6 +98,6 @@ def generate_launch_description():
         robot_state_publisher, gazebo, spawn_entity,
         joint_state_broadcaster_spawner, ackermann_steering_controller_spawner,
         game_controller_node, teleop_twist_joy_node, slam_toolbox_node,
-        astar_planner_node, # ✅ Python array layout parser commas fixed here
+        astar_planner_node, costmap_node,
         rviz_node
     ])

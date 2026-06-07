@@ -18,6 +18,9 @@ find_package(nav_msgs REQUIRED)
 add_executable(astar_planner src/astar_planner.cpp)
 ament_target_dependencies(astar_planner rclcpp nav_msgs geometry_msgs tf2_ros)
 
+add_executable(costmap_node src/costmap_node.cpp)
+ament_target_dependencies(costmap_node rclcpp nav_msgs)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -37,6 +40,7 @@ install(
 
 install(TARGETS
   astar_planner
+  costmap_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
