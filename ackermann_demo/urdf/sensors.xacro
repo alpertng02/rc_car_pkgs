@@ -8,13 +8,13 @@
   <joint name="battery_joint" type="fixed">
     <parent link="chassis"/>
     <child link="battery_link"/>
-    <origin xyz="0 0 0.02" rpy="0 0 0"/> 
+    <origin xyz="0 0 0.032" rpy="0 0 0"/> 
   </joint>
 
   <link name="battery_link">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
-      <geometry> <box size="0.135 0.042 0.021"/> </geometry>
+      <geometry> <box size="0.14 0.0435 0.021"/> </geometry>
       <material name="lipo_blue"/>
     </visual>
     <collision>
@@ -37,14 +37,14 @@
   <joint name="jetson_joint" type="fixed">
     <parent link="chassis"/>
     <child link="jetson_link"/>
-    <origin xyz="-0.11 -0.04 0.04" rpy="0 0 0"/> 
+    <origin xyz="-0.1 -0.025 0.06" rpy="0 0 0"/> 
   </joint>
 
   <link name="jetson_link">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find ackermann_demo)/meshes/jetson_nano.dae" scale="0.001 0.001 0.001"/>
+        <mesh filename="file://$(find ackermann_demo)/meshes/jetson_orin_nano.dae" scale="0.001 0.001 0.001"/>
       </geometry>
     </visual>
     <inertial>
@@ -56,7 +56,7 @@
   <joint name="laser_joint" type="fixed">
     <parent link="chassis"/>
     <child link="laser_frame"/>
-    <origin xyz="0.06 0 0.075" rpy="0 0 ${M_PI}"/>
+    <origin xyz="0.062 0 0.096" rpy="0 0 ${M_PI}"/>
   </joint>
 
   <link name="laser_frame">
@@ -178,7 +178,7 @@
   <joint name="camera_joint" type="fixed">
     <parent link="chassis"/>
     <child link="camera_link"/>
-    <origin xyz="0.1 0 0.03" rpy="0 0 0"/>
+    <origin xyz="0.086 0 0.033" rpy="0 0 0"/>
   </joint>
 
   <link name="camera_link">

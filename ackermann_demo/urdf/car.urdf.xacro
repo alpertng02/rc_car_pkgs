@@ -15,6 +15,7 @@
   
   <material name="blue"> <color rgba="0.1 0.1 0.8 1.0"/> </material>
   <material name="black"> <color rgba="0.0 0.0 0.0 1.0"/> </material>
+  <material name="dark_grey"> <color rgba="0.2 0.2 0.2 1.0"/> </material>
 
   <link name="base_footprint"/>
 
@@ -48,6 +49,78 @@
     <parent link="base_link"/>
     <child link="chassis"/>
     <origin xyz="0 0 0.05" rpy="0 0 0"/>
+  </joint>
+
+  <link name="adapter_floor">
+    <visual>
+      <origin xyz="0.09 -0.043 0" rpy="${M_PI/2} 0 ${M_PI}"/>
+      <geometry>
+        <mesh filename="file://$(find ackermann_demo)/meshes/adapter_floor.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="dark_grey"/>
+    </visual>
+    <collision>
+      <geometry> <box size="0.16 0.07 0.005"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.00002" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+
+  <joint name="adapter_floor_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="adapter_floor"/>
+    <origin xyz="0.0 0.0 0.015" rpy="0 0 0"/>
+  </joint>
+
+  <link name="adapter_roof">
+    <visual>
+      <origin xyz="0.105 -0.05 0" rpy="${M_PI/2} 0 ${M_PI}"/>
+      <geometry>
+        <mesh filename="file://$(find ackermann_demo)/meshes/adapter_roof.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="dark_grey"/>
+    </visual>
+    <collision>
+      <geometry> <box size="0.16 0.07 0.005"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.00002" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+    </inertial>
+  </link>
+
+  <joint name="adapter_roof_joint" type="fixed">
+    <parent link="adapter_floor"/>
+    <child link="adapter_roof"/>
+    <origin xyz="0 0 0.035" rpy="0 0 0"/> 
+  </joint>
+
+  <link name="lidar_holder">
+    <visual>
+      <origin xyz="0.068 -0.0365 0.015" rpy="0 ${M_PI} 0"/>
+      <geometry>
+        <mesh filename="file://$(find ackermann_demo)/meshes/lidar_holder.STL" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry> <cylinder radius="0.04" length="0.015"/> </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.03"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00002"/>
+    </inertial>
+  </link>
+
+  <joint name="lidar_holder_joint" type="fixed">
+    <parent link="adapter_roof"/>
+    <child link="lidar_holder"/>
+    <origin xyz="0.03 0 0.005" rpy="0 0 0"/> 
   </joint>
 
   <xacro:rc_wheel_link name="rear_left_wheel" radius="${wheel_radius}" length="${wheel_width}"/>
