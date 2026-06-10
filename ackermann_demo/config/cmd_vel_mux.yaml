@@ -1,0 +1,17 @@
+cmd_vel_mux:
+  ros__parameters:
+    default_frame: "base_link"
+
+    subscribers:
+      joystick:
+        topic: "cmd_vel_teleop"
+        timeout: 0.3
+        priority: 100
+        short_desc: "Manual Remote Control Override"
+        stamped: true
+      navigation:
+        topic: "cmd_vel_stanley"
+        timeout: 0.5
+        priority: 10
+        short_desc: "Autonomous Path Tracker Input"
+        stamped: true

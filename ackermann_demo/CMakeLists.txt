@@ -14,12 +14,27 @@ find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(hardware_interface REQUIRED)
 
 add_executable(astar_planner src/astar_planner.cpp)
 ament_target_dependencies(astar_planner rclcpp nav_msgs geometry_msgs tf2_ros)
 
 add_executable(costmap_node src/costmap_node.cpp)
 ament_target_dependencies(costmap_node rclcpp nav_msgs)
+
+add_executable(stanley_controller src/stanley_controller.cpp)
+ament_target_dependencies(stanley_controller rclcpp geometry_msgs nav_msgs tf2_ros)
+
+add_library(ackermann_demo_hardware SHARED src/ackermann_hardware_interface.cpp)
+
+# 🟢 ALTERNATIVE: Pass it directly to ament if find_package is declared at the top
+ament_target_dependencies(ackermann_demo_hardware rclcpp pluginlib hardware_interface)
+
+# Register the pluginlib descriptor map file
+pluginlib_export_plugin_description_file(hardware_interface ackermann_demo_hardware.xml)
+
+# Install rules configuration
+install(TARGETS ackermann_demo_hardware DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -41,6 +56,7 @@ install(
 install(TARGETS
   astar_planner
   costmap_node
+  stanley_controller
   DESTINATION lib/${PROJECT_NAME}
 )
 

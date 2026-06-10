@@ -1,0 +1,9 @@
+<library path="ackermann_demo_hardware">
+  <class name="ackermann_demo/AckermannHardwareInterface"
+         type="ackermann_demo::AckermannHardwareInterface"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      Custom ros2_control hardware interface for an Ackermann RC car.
+    </description>
+  </class>
+</library>

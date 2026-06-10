@@ -1,0 +1,86 @@
+import os
+import xacro
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration, Command
+from launch.conditions import IfCondition
+from launch_ros.actions import Node
+
+def generate_launch_description():
+    pkg_path = get_package_share_directory('ackermann_demo')
+    
+    # Configuration Paths
+    slam_config_path = os.path.join(pkg_path, 'config', 'mapper_params_online_async.yaml')
+    controllers_yaml_path = os.path.join(pkg_path, 'config', 'controllers.yaml')
+
+    # Hardware Feature Toggles
+    use_slam_arg = DeclareLaunchArgument('use_slam', default_value='true')
+    use_nav_arg = DeclareLaunchArgument('use_nav', default_value='true')
+    
+    # Compile URDF with sim_mode disabled to invoke C++ Serial Plugins
+    xacro_file = os.path.join(pkg_path, 'urdf', 'car.urdf.xacro')
+    robot_desc = {
+        'robot_description': Command(['xacro ', xacro_file, ' sim_mode:=false'])
+    }
+    
+    # Robot State Publisher (Calculates TF frames using Jetson system time)
+    robot_state_publisher = Node(
+        package='robot_state_publisher', executable='robot_state_publisher',
+        output='screen', parameters=[robot_desc, {'use_sim_time': False}]
+    )
+    
+    # Standalone ros2_control Node (Replaces Gazebo backend manager)
+    # real_car_control_node = Node(
+    #     package='controller_manager', executable='ros2_control_node',
+    #     parameters=[robot_desc, controllers_yaml_path, {'use_sim_time': False}],
+    #     output='screen'
+    # )
+    
+    # Hardware Driver: RPLidar A1 Driver Node
+    lidar_driver_node = Node(
+        package='sllidar_ros2', executable='sllidar_node', name='sllidar_node',
+        parameters=[{
+            'channel_type': 'serial',
+            'serial_port': '/dev/ttyUSB0',
+            'serial_baudrate': 115200,
+            'frame_id': 'laser_frame', 
+            'inverted': False,
+            'angle_compensate': True,
+            'use_sim_time': False
+        }],
+        output='screen'
+    )
+
+    # Spawners (Once real_car_control_node establishes the pipeline, inject controllers)
+    joint_state_broadcaster_spawner = Node(package="controller_manager", executable="spawner", arguments=["joint_state_broadcaster"])
+    ackermann_steering_controller_spawner = Node(package="controller_manager", executable="spawner", arguments=["ackermann_steering_controller"])
+    
+    # Mapping & Navigation Stack Nodes
+    slam_toolbox_node = Node(
+        package='slam_toolbox', executable='async_slam_toolbox_node', name='slam_toolbox', output='screen',
+        condition=IfCondition(LaunchConfiguration('use_slam')), parameters=[slam_config_path, {'use_sim_time': False}]
+    )
+
+    astar_planner_node = Node(
+        package='ackermann_demo', executable='astar_planner', name='astar_planner', output='screen',
+        condition=IfCondition(LaunchConfiguration('use_nav')), parameters=[{'use_sim_time': False}] 
+    )
+    
+    costmap_node = Node(
+        package='ackermann_demo', executable='costmap_node', name='costmap_node', output='screen',
+        condition=IfCondition(LaunchConfiguration('use_nav')), 
+        parameters=[{'use_sim_time': False, 'robot_radius': 0.22, 'safety_margin': 0.15}]
+    )
+
+    return LaunchDescription([
+        use_slam_arg, use_nav_arg,
+        robot_state_publisher,
+        #real_car_control_node,
+        lidar_driver_node,
+        joint_state_broadcaster_spawner,
+        ackermann_steering_controller_spawner,
+        slam_toolbox_node,
+        astar_planner_node,
+        costmap_node
+    ])

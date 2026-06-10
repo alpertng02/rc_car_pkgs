@@ -5,6 +5,57 @@
   <material name="black_lidar"> <color rgba="0.1 0.1 0.1 1.0"/> </material>
   <material name="raspberry_green"> <color rgba="0.0 0.4 0.0 1.0"/> </material>
 
+  <link name="imu_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 0.015 0.005"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <inertial>
+      <mass value="0.005"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="0.000001" ixy="0.0" ixz="0.0" iyy="0.000001" iyz="0.0" izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <gazebo reference="imu_link">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <update_rate>100.0</update_rate>
+      <visualize>true</visualize>
+      <topic>__default_topic__</topic>
+      
+      <plugin name="ackermann_imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+        <ros>
+          <remapping>~/out:=/imu</remapping>
+        </ros>
+        <frame_name>imu_link</frame_name>
+        <initial_orientation_as_reference>false</initial_orientation_as_reference>
+      </plugin>
+
+      <imu>
+        <angular_velocity>
+          <x><type>gaussian</type><mean>0.0</mean><stddev>2e-4</stddev></x>
+          <y><type>gaussian</type><mean>0.0</mean><stddev>2e-4</stddev></y>
+          <z><type>gaussian</type><mean>0.0</mean><stddev>2e-4</stddev></z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x><type>gaussian</type><mean>0.0</mean><stddev>1.7e-2</stddev></x>
+          <y><type>gaussian</type><mean>0.0</mean><stddev>1.7e-2</stddev></y>
+          <z><type>gaussian</type><mean>0.0</mean><stddev>1.7e-2</stddev></z>
+        </linear_acceleration>
+      </imu>
+    </sensor>
+  </gazebo>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="chassis"/>
+    <child link="imu_link"/>
+    <origin xyz="0.0 0.0 0.01" rpy="0 0 0"/>
+  </joint>
+
   <joint name="battery_joint" type="fixed">
     <parent link="chassis"/>
     <child link="battery_link"/>
@@ -56,7 +107,7 @@
   <joint name="laser_joint" type="fixed">
     <parent link="chassis"/>
     <child link="laser_frame"/>
-    <origin xyz="0.062 0 0.096" rpy="0 0 ${M_PI}"/>
+    <origin xyz="0.068 0 0.096" rpy="0 0 ${M_PI}"/>
   </joint>
 
   <link name="laser_frame">
