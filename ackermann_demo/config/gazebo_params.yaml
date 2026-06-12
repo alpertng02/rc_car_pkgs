@@ -1,0 +1,7 @@
+# Parameters for the /gazebo node (gazebo_ros_init).
+# /clock defaults to 10 Hz, which throttles every sim-time timer outside the
+# gazebo process (e.g. the EKF would only update its TF at ~10 Hz, leaving
+# 100 ms pose gaps for the 50 Hz Stanley loop).
+gazebo:
+  ros__parameters:
+    publish_rate: 200.0

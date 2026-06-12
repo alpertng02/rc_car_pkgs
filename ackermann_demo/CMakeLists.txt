@@ -15,15 +15,22 @@ find_package(tf2_ros REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(hardware_interface REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(image_geometry REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 add_executable(astar_planner src/astar_planner.cpp)
-ament_target_dependencies(astar_planner rclcpp nav_msgs geometry_msgs tf2_ros)
+ament_target_dependencies(astar_planner rclcpp nav_msgs geometry_msgs std_msgs tf2_ros)
 
 add_executable(costmap_node src/costmap_node.cpp)
 ament_target_dependencies(costmap_node rclcpp nav_msgs)
 
 add_executable(stanley_controller src/stanley_controller.cpp)
-ament_target_dependencies(stanley_controller rclcpp geometry_msgs nav_msgs tf2_ros)
+ament_target_dependencies(stanley_controller rclcpp sensor_msgs geometry_msgs nav_msgs std_msgs tf2_ros)
+
+add_executable(lidar_camera_fusion src/lidar_camera_fusion.cpp)
+ament_target_dependencies(lidar_camera_fusion rclcpp sensor_msgs tf2_ros tf2_geometry_msgs cv_bridge image_geometry)
 
 add_library(ackermann_demo_hardware SHARED src/ackermann_hardware_interface.cpp)
 
@@ -57,6 +64,7 @@ install(TARGETS
   astar_planner
   costmap_node
   stanley_controller
+  lidar_camera_fusion
   DESTINATION lib/${PROJECT_NAME}
 )
 

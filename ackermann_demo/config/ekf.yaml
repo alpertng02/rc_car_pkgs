@@ -1,0 +1,46 @@
+# robot_localization EKF: fuses wheel odometry with the IMU and owns the
+# odom -> base_footprint transform (enable_odom_tf must stay false in
+# controllers.yaml so the steering controller does not publish a second one).
+ekf_filter_node:
+  ros__parameters:
+    use_sim_time: true
+    frequency: 100.0   # match the TF rate the steering controller used to publish
+    sensor_timeout: 0.2
+    two_d_mode: true
+    publish_tf: true
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom
+
+    # Wheel odometry: fuse the body-frame velocities, not the integrated pose,
+    # so kinematic drift is not treated as a measurement. vy is a hard zero from
+    # the Ackermann model and keeps lateral velocity bounded.
+    # NOTE: gazebo.xacro remaps the controller's ~/odometry to /odom.
+    # Config layout: [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
+    odom0: /odom
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  true,  false,
+                   false, false, false,
+                   false, false, false]
+    odom0_differential: false
+    odom0_queue_size: 10
+
+    # IMU: only the gyro yaw rate is fused. It replaces the kinematic yaw
+    # estimate, which is the weak point of Ackermann odometry during slip and
+    # tight turns. The accelerometer is deliberately NOT fused: the message
+    # carries zero covariance (treated as near-perfect by the filter), so
+    # integrating its noise makes the pose jitter badly. If it is ever
+    # re-enabled (ax -> true), imu0_remove_gravitational_acceleration: true
+    # must be set alongside it.
+    imu0: /imu
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 20

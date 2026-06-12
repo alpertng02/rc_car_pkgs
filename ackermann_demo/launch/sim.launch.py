@@ -14,6 +14,8 @@ def generate_launch_description():
     # Configuration Paths
     rviz_config_path = os.path.join(pkg_path, 'rviz', 'rc_car.rviz')
     slam_config_path = os.path.join(pkg_path, 'config', 'mapper_params_online_async.yaml')
+    ekf_config_path = os.path.join(pkg_path, 'config', 'ekf.yaml')
+    gazebo_params_path = os.path.join(pkg_path, 'config', 'gazebo_params.yaml')
     world_path = os.path.join(pkg_path, 'worlds', 'museum.world')
     ps4_config_path = os.path.join(pkg_path, 'config', 'ps4_rc.yaml')
 
@@ -22,6 +24,7 @@ def generate_launch_description():
     use_slam_arg = DeclareLaunchArgument('use_slam', default_value='false')
     use_nav_arg = DeclareLaunchArgument('use_nav', default_value='false')
     use_rviz_arg = DeclareLaunchArgument('use_rviz', default_value='true')
+    use_cam_fuse_arg = DeclareLaunchArgument('use_cam_fuse', default_value='false')
     
     # Compile URDF with sim_mode enabled
     xacro_file = os.path.join(pkg_path, 'urdf', 'car.urdf.xacro')
@@ -38,7 +41,9 @@ def generate_launch_description():
     # Gazebo World & Spawner
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')]),
-        launch_arguments={'world': world_path}.items()
+        # params_file raises the /clock publish rate (default 10 Hz throttles
+        # every sim-time timer outside gazebo, including the EKF's TF output).
+        launch_arguments={'world': world_path, 'params_file': gazebo_params_path}.items()
     )
     
     spawn_entity = Node(
@@ -51,12 +56,21 @@ def generate_launch_description():
     joint_state_broadcaster_spawner = Node(package="controller_manager", executable="spawner", arguments=["joint_state_broadcaster"])
     ackermann_steering_controller_spawner = Node(package="controller_manager", executable="spawner", arguments=["ackermann_steering_controller"])
     
+    # Sensor fusion: wheel odometry + IMU -> odom->base_footprint TF.
+    # Runs unconditionally because everything above it (slam, nav, teleop
+    # visualization) depends on the odom frame.
+    ekf_node = Node(
+        package='robot_localization', executable='ekf_node', name='ekf_filter_node',
+        output='screen', parameters=[ekf_config_path, {'use_sim_time': True}]
+    )
+
     # Optional Simulation Mapping & Navigation Nodes
     slam_toolbox_node = Node(
         package='slam_toolbox', executable='async_slam_toolbox_node', name='slam_toolbox', output='screen',
         condition=IfCondition(LaunchConfiguration('use_slam')), parameters=[slam_config_path, {'use_sim_time': True}]
     )
 
+    # 🏁 UPDATED: Expanded with full structural parameters matching the upgraded Hybrid A* planner
     astar_planner_node = Node(
         package='ackermann_demo',
         executable='astar_planner',
@@ -65,10 +79,13 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time': True,
             'default_tolerance': 0.25,       
-            'turning_radius': 0.5,          
-            'step_size': 0.1,               
-            'max_iterations': 500000,          
-            'deviation_threshold': 0.20      
+            'turning_radius': 0.35,          # Kept tightly calibrated to your physical RC bounds
+            'step_size': 0.15,               
+            'max_iterations': 500000,        # High exploration budget for long-distance searches
+            'deviation_threshold': 0.20,     
+            'lethal_cost_threshold': 85,     # Obstacle density boundary
+            'unknown_cost_penalty': 5.0,    # Metric cost weight multiplier for unmapped space
+            'theta_bins': 72                 # 5-degree discrete heading state grid resolution
         }],
         condition=IfCondition(LaunchConfiguration('use_nav')) 
     )
@@ -79,7 +96,7 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True, 'robot_radius': 0.18, 'safety_margin': 0.22}]
     )
     
-    # 🏎️ OVERHAULED: Parameters aligned exactly with the production Stanley node
+    # 🏎️ UPDATED: Added structural parameters for proprioceptive stall monitoring
     stanley_controller_node = Node(
         package='ackermann_demo',
         executable='stanley_controller',
@@ -88,27 +105,44 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': True,
+            'control_hz': 50.0,
+            
             # Mechanical Dimensions
-            'wheelbase': 0.1688,                  # Calibrated rear-to-front axle distance [m]
-            'max_steering_angle': 0.523,          # Calibrated max steering lock [rad] (~30 deg)
+            'wheelbase': 0.1688,                  
+            'max_steering_angle': 0.523,          
             
             # Tracking Gains
-            'stanley_k': 1.6,                     # Cross-track error tracking gain
-            'stanley_k_soft': 0.18,               # Velocity softening dampener [m/s]
+            'stanley_k': 1.6,                     
+            'stanley_k_soft': 0.18,               
             
             # Operational Constraints
-            'max_linear_velocity': 1.0,          # Forward cruise profile limit [m/s]
-            'max_reverse_velocity': 0.30,         # Reverse profile limit [m/s]
-            'goal_tolerance': 0.10,               # Goal arrival radius bubble [m]
+            'max_linear_velocity': 1.0,          
+            'max_reverse_velocity': 1.0,         
+            'goal_tolerance': 0.10,               
             
             # Acceleration Ramp Profiles
-            'max_acceleration': 0.50,             # Longitudinal acceleration limits [m/s²]
-            'max_deceleration': 0.90,             # Braking/Deceleration profile limits [m/s²]
-            'steer_speed_reduction': 0.70,        # Aggressiveness of cornering velocity dampening
-            'path_timeout_sec': 30.0               # Safety fallback data-drop window timeout [s]
+            'max_acceleration': 0.50,             
+            'max_deceleration': 0.90,             
+            'steer_speed_reduction': 0.70,        
+            'path_timeout_sec': 20.0,             
+            'ultrasonic_safety_dist': 0.30,       
+
+            # 🟢 ADDED: Proprioceptive Stall & Wheel Slip Monitoring Configurations
+            'stall_velocity_threshold': 0.15,     # Minimum speed command to begin evaluating [m/s]
+            'stall_odom_threshold': 0.02,         # Maximum speed baseline below which the car is considered stuck [m/s]
+            'stall_accel_threshold': 0.05,        # Noise ceiling for real IMU linear acceleration frames [m/s²]
+            'stall_timeout_sec': 1.0,             # Allowed time window of zero acceleration/movement before path dropout
+            'collision_accel_threshold': 3.0      # IMU forward-acceleration spike that is treated as an impact [m/s²]
         }]
     )
     
+    # LiDAR-Camera Fusion: colors the laser scan with camera RGB -> /colored_scan
+    lidar_camera_fusion_node = Node(
+        package='ackermann_demo', executable='lidar_camera_fusion', name='lidar_camera_fusion', output='screen',
+        condition=IfCondition(LaunchConfiguration('use_cam_fuse')),
+        parameters=[{'use_sim_time': True}]
+    )
+
     # Optional Gamepad & Visualization
     game_controller_node = Node(
         package='joy', executable='game_controller_node', name='game_controller_node',
@@ -138,11 +172,13 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        controller_ps4_arg, use_slam_arg, use_nav_arg, use_rviz_arg,
+        controller_ps4_arg, use_slam_arg, use_nav_arg, use_rviz_arg, use_cam_fuse_arg,
         robot_state_publisher, gazebo, spawn_entity,
         joint_state_broadcaster_spawner, ackermann_steering_controller_spawner,
+        ekf_node,
         game_controller_node, teleop_twist_joy_node, cmd_vel_mux_node,
         slam_toolbox_node,
-        astar_planner_node, costmap_node, stanley_controller_node, 
+        astar_planner_node, costmap_node, stanley_controller_node,
+        lidar_camera_fusion_node,
         rviz_node
     ])
