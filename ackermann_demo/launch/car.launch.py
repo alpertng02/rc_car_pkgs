@@ -6,6 +6,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, Command
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     pkg_path = get_package_share_directory('ackermann_demo')
@@ -20,8 +21,10 @@ def generate_launch_description():
     
     # Compile URDF with sim_mode disabled to invoke C++ Serial Plugins
     xacro_file = os.path.join(pkg_path, 'urdf', 'car.urdf.xacro')
+    # ParameterValue(value_type=str) stops launch_ros from YAML-parsing the
+    # URDF, which fails on colons inside XML comments.
     robot_desc = {
-        'robot_description': Command(['xacro ', xacro_file, ' sim_mode:=false'])
+        'robot_description': ParameterValue(Command(['xacro ', xacro_file, ' sim_mode:=false']), value_type=str)
     }
     
     # Robot State Publisher (Calculates TF frames using Jetson system time)
@@ -44,7 +47,7 @@ def generate_launch_description():
             'channel_type': 'serial',
             'serial_port': '/dev/ttyUSB0',
             'serial_baudrate': 115200,
-            'frame_id': 'laser_frame', 
+            'frame_id': 'laser_frame',
             'inverted': False,
             'angle_compensate': True,
             'use_sim_time': False

@@ -70,7 +70,7 @@ public:
             std::bind(&StanleyControllerNode::pathCallback, this, std::placeholders::_1));
 
         ultrasonic_sub_ = this->create_subscription<sensor_msgs::msg::Range>(
-            "/ultrasonic/distance", rclcpp::SensorDataQoS(),
+            "/ultrasonic/range", rclcpp::SensorDataQoS(),
             std::bind(&StanleyControllerNode::ultrasonicCallback, this, std::placeholders::_1));
 
         imu_sub_ = this->create_subscription<sensor_msgs::msg::Imu>(

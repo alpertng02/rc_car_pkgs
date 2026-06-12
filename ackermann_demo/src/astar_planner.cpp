@@ -66,22 +66,32 @@ using QueueEntry = std::pair<double, Index3D>;
 using WorldPoint = std::pair<double,double>;
 
 struct PlannerParams {
-    double default_tolerance;       
-    double turning_radius;          
-    double step_size;               
+    double default_tolerance;
+    double turning_radius;
+    double step_size;
     int    max_iterations;
-    double deviation_threshold;     
-    int    lethal_cost_threshold;   
-    double unknown_cost_penalty;    
+    double deviation_threshold;
+    int    lethal_cost_threshold;
+    double unknown_cost_penalty;
     int    theta_bins;
     int    stall_dir;               // 0 = free, +1 = stalled driving forward, -1 = stalled reversing
+    double escape_radius;           // start-pose bubble where graded inflation is not lethal
+    double goal_yaw_tol;            // max heading error at the goal [rad]
+};
+
+// Relaxation zone around a start pose that sits inside the costmap's inflated
+// cushion: within it, graded inflation cells are traversable and only hard
+// occupancy (cost 100) stays lethal, so the planner can free a wedged car.
+struct EscapeBubble {
+    double x = 0.0, y = 0.0, radius = 0.0;
+    bool   active = false;
 };
 
 class AStarPlannerNode : public rclcpp::Node
 {
 public:
     AStarPlannerNode()
-      : Node("astar_planner"), new_goal_set_(false), stall_dir_(0)
+      : Node("astar_planner"), new_goal_set_(false), plan_pending_(false), stall_dir_(0)
     {
         tf_buffer_   = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -89,11 +99,15 @@ public:
         this->declare_parameter("default_tolerance",     0.25);
         this->declare_parameter("turning_radius",        0.35);
         this->declare_parameter("step_size",             0.15);
-        this->declare_parameter("max_iterations",        5000);
+        // Honest goal-yaw matching needs real turn-around maneuvers; 5k
+        // exhausted on those (car.launch.py runs with this default).
+        this->declare_parameter("max_iterations",        100000);
         this->declare_parameter("deviation_threshold",   0.20);
         this->declare_parameter("lethal_cost_threshold", 85);
         this->declare_parameter("unknown_cost_penalty",  15.0);   
-        this->declare_parameter("theta_bins",            72);      
+        this->declare_parameter("theta_bins",            72);
+        this->declare_parameter("escape_radius",         0.50);
+        this->declare_parameter("goal_yaw_tolerance_deg", 15.0);
 
         map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
             "/inflated_costmap", 10,
@@ -125,7 +139,8 @@ private:
     void goalCallback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
         std::lock_guard<std::mutex> lk(map_mutex_);
         latest_goal_pose_ = msg;
-        new_goal_set_     = true;
+        new_goal_set_     = true;   // one-time bookkeeping (virtual obstacle reset)
+        plan_pending_     = true;   // cleared only by a successful plan
     }
 
     void stallCallback(const std_msgs::msg::Int8::SharedPtr msg) {
@@ -154,25 +169,30 @@ private:
     }
 
     // ── 🟢 UPDATED: Checks against injected hardware safety zones ────────────
-    bool cellIsFree(double wx, double wy, const nav_msgs::msg::OccupancyGrid& map, int max_cost) const {
+    bool cellIsFree(double wx, double wy, const nav_msgs::msg::OccupancyGrid& map, int max_cost,
+                    const EscapeBubble& esc = EscapeBubble{}) const {
         // Evaluate memory buffer of blind static stall coordinates
         for (const auto& obs : virtual_obstacles_) {
             if (std::hypot(wx - obs.first, wy - obs.second) < 0.22) { // 22cm radial tracking safety boundary
                 return false; // Force immediate collision rejection
             }
         }
-        
+
         int v = cellValue(wx, wy, map);
-        if (v == -2) return false;  
-        if (v == -1) return true;   
-        return v < max_cost;
+        if (v == -2) return false;
+        if (v == -1) return true;
+        if (v < max_cost) return true;
+        // Inside the escape bubble graded inflation is traversable (the chassis
+        // is already parked in it); only hard occupancy stays lethal.
+        return esc.active && v < 100 && std::hypot(wx - esc.x, wy - esc.y) < esc.radius;
     }
 
     // Integrates a constant-curvature arc with collision checks and outputs the
     // endpoint, so successor nodes land exactly on the collision-checked trajectory.
     bool propagateArc(double x0, double y0, double th0, double kappa, double arc_len, int dir,
                       const nav_msgs::msg::OccupancyGrid& map, int max_cost,
-                      double& xf, double& yf, double& thf) const {
+                      double& xf, double& yf, double& thf,
+                      const EscapeBubble& esc = EscapeBubble{}) const {
         int steps = std::max(3, static_cast<int>(arc_len / (map.info.resolution * 0.4)));
         double ds = arc_len / steps; double x = x0, y = y0, th = th0;
 
@@ -180,20 +200,21 @@ private:
             x  += dir * ds * std::cos(th);
             y  += dir * ds * std::sin(th);
             th  = wrapPi(th + dir * ds * kappa);
-            if (!cellIsFree(x, y, map, max_cost)) return false;
+            if (!cellIsFree(x, y, map, max_cost, esc)) return false;
         }
         xf = x; yf = y; thf = th;
         return true;
     }
 
-    bool segmentIsFree(double x1, double y1, double x2, double y2, const nav_msgs::msg::OccupancyGrid& map, int max_cost) const {
+    bool segmentIsFree(double x1, double y1, double x2, double y2, const nav_msgs::msg::OccupancyGrid& map, int max_cost,
+                       const EscapeBubble& esc = EscapeBubble{}) const {
         double dist = std::hypot(x2 - x1, y2 - y1);
-        if (dist < 1e-6) return cellIsFree(x1, y1, map, max_cost);
+        if (dist < 1e-6) return cellIsFree(x1, y1, map, max_cost, esc);
         int steps = std::max(2, static_cast<int>(dist / (map.info.resolution * 0.4)));
 
         for (int i = 0; i <= steps; ++i) {
             double t = static_cast<double>(i) / steps;
-            if (!cellIsFree(x1 + t*(x2-x1), y1 + t*(y2-y1), map, max_cost)) return false;
+            if (!cellIsFree(x1 + t*(x2-x1), y1 + t*(y2-y1), map, max_cost, esc)) return false;
         }
         return true;
     }
@@ -246,17 +267,21 @@ private:
         nav_msgs::msg::OccupancyGrid::SharedPtr    local_map;
         geometry_msgs::msg::PoseStamped::SharedPtr local_goal;
         bool local_new_goal;
+        bool local_plan_pending;
         int  local_stall_dir;
         {
             std::lock_guard<std::mutex> lk(map_mutex_);
-            local_map       = map_msg_;
-            local_goal      = latest_goal_pose_;
-            local_new_goal  = new_goal_set_;
-            local_stall_dir = stall_dir_;
+            local_map          = map_msg_;
+            local_goal         = latest_goal_pose_;
+            local_new_goal     = new_goal_set_;
+            local_plan_pending = plan_pending_;
+            local_stall_dir    = stall_dir_;
         }
-        // new_goal_set_ is cleared only after a successful plan, so a goal that
+        // plan_pending_ is cleared only after a successful plan, so a goal that
         // arrives before the map/TF is ready, or whose first plan fails, is
         // retried on the next tick instead of being silently dropped.
+        // new_goal_set_ is consumed on the first tick that processes the goal,
+        // so per-goal bookkeeping does not repeat on every retry.
         if (!local_map || !local_goal) return;
 
         PlannerParams p;
@@ -269,6 +294,8 @@ private:
         p.unknown_cost_penalty  = this->get_parameter("unknown_cost_penalty").as_double();
         p.theta_bins            = this->get_parameter("theta_bins").as_int();
         p.stall_dir             = local_stall_dir;
+        p.escape_radius         = this->get_parameter("escape_radius").as_double();
+        p.goal_yaw_tol          = this->get_parameter("goal_yaw_tolerance_deg").as_double() * DEG2RAD;
 
         double sx = 0.0, sy = 0.0, syaw = 0.0;
         try {
@@ -282,10 +309,14 @@ private:
         double gyaw = std::atan2(2.0*(local_goal->pose.orientation.w * local_goal->pose.orientation.z + local_goal->pose.orientation.x * local_goal->pose.orientation.y),
             1.0 - 2.0*(local_goal->pose.orientation.y * local_goal->pose.orientation.y + local_goal->pose.orientation.z * local_goal->pose.orientation.z));
 
-        // 🟢 FIXED: Clear virtual obstacles on fresh goal dispatch to prevent map ghosting
+        // 🟢 FIXED: Clear virtual obstacles on fresh goal dispatch to prevent map ghosting.
+        // Consumed here so retries of a failing plan do not wipe the memory again
+        // (the stall-recovery obstacles must survive across retry ticks).
         if (local_new_goal) {
             virtual_obstacles_.clear();
             RCLCPP_INFO(this->get_logger(), "🧹 Fresh destination targeted. Cleared virtual obstacle memory.");
+            std::lock_guard<std::mutex> lk(map_mutex_);
+            new_goal_set_ = false;
         }
 
         // Inject a virtual obstacle on the side the robot was moving toward when it
@@ -310,7 +341,7 @@ private:
             }
         }
 
-        bool do_replan = local_new_goal || local_stall_dir != 0;
+        bool do_replan = local_plan_pending || local_stall_dir != 0;
         if (!do_replan && !current_global_path_.empty()) {
             double min_d = std::numeric_limits<double>::max();
             for (const auto& wp : current_global_path_) min_d = std::min(min_d, std::hypot(wp.first - sx, wp.second - sy));
@@ -330,12 +361,15 @@ private:
             current_global_path_.clear();
             for (const auto& nd : path) current_global_path_.push_back({nd.x, nd.y});
             publishPath(path, computeVelocityProfile(path));
-            if (local_new_goal) {
+            if (local_plan_pending) {
                 std::lock_guard<std::mutex> lk(map_mutex_);
-                new_goal_set_ = false;
+                plan_pending_ = false;
             }
         } else {
-            RCLCPP_WARN(this->get_logger(), "Hybrid A*: no path found.");
+            const bool goal_blocked = !cellIsFree(gx, gy, *local_map, p.lethal_cost_threshold);
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                "Hybrid A*: no path found%s. Retrying until the goal is reached or replaced.",
+                goal_blocked ? " (goal lies inside an obstacle or its inflation zone)" : "");
         }
     }
 
@@ -345,6 +379,20 @@ private:
         const double max_k = 1.0 / p.turning_radius;
         const std::array<double, 5> kappas = {-max_k, -max_k*0.5, 0.0, max_k*0.5, max_k};
         const std::array<int, 2>    dirs   = {1, -1};
+
+        // Escape bubble: when the start pose already sits inside the costmap's
+        // inflated cushion (bumper centimeters from a wall), every first arc
+        // from the start node would be rejected and planning could never free
+        // the car. Within escape_radius of the start, graded inflation is
+        // accepted and only hard occupancy stays lethal, so a short escape
+        // maneuver (typically reversing out) exists.
+        EscapeBubble esc;
+        if (!cellIsFree(sx, sy, map, p.lethal_cost_threshold)) {
+            esc = {sx, sy, p.escape_radius, true};
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+                "Start pose is inside the inflated lethal zone. Allowing escape arcs within %.2f m.",
+                p.escape_radius);
+        }
 
         std::priority_queue<QueueEntry, std::vector<QueueEntry>, std::greater<QueueEntry>> open_set;
         std::unordered_set<Index3D, TupleHash>          closed;
@@ -377,11 +425,16 @@ private:
             double d_goal     = std::hypot(cur.x - gx, cur.y - gy);
             double angle_diff = std::abs(wrapPi(cur.theta - gyaw));
 
-            if (d_goal < p.default_tolerance && angle_diff < 30.0 * DEG2RAD) return reconstructPath(pool, cur_pi);   
+            if (d_goal < p.default_tolerance && angle_diff < p.goal_yaw_tol) return reconstructPath(pool, cur_pi);
 
+            // Analytic straight-shot finisher. Only valid when the segment is
+            // kinematically honest: the car already heads along the segment
+            // bearing AND that bearing matches the requested goal yaw, so the
+            // final pose orientation is actually achieved, not just labeled.
             if (p.stall_dir == 0 && d_goal < 4.0 * p.turning_radius) {
                 double head  = std::atan2(gy - cur.y, gx - cur.x); double align = std::abs(wrapPi(head - cur.theta));
-                if (align < 45.0 * DEG2RAD && segmentIsFree(cur.x, cur.y, gx, gy, map, p.lethal_cost_threshold)) {
+                if (align < p.goal_yaw_tol && std::abs(wrapPi(head - gyaw)) < p.goal_yaw_tol &&
+                    segmentIsFree(cur.x, cur.y, gx, gy, map, p.lethal_cost_threshold, esc)) {
                     int n_steps = std::max(1, static_cast<int>(d_goal / p.step_size)); int par = cur_pi; double g_acc = cur.g;
                     for (int s = 1; s <= n_steps; ++s) {
                         double r = static_cast<double>(s) / n_steps;
@@ -401,7 +454,7 @@ private:
 
                 for (double k : kappas) {
                     double nx, ny, nth;
-                    if (!propagateArc(cur.x, cur.y, cur.theta, k, p.step_size, dir, map, p.lethal_cost_threshold, nx, ny, nth)) continue;
+                    if (!propagateArc(cur.x, cur.y, cur.theta, k, p.step_size, dir, map, p.lethal_cost_threshold, nx, ny, nth, esc)) continue;
 
                     int    cv      = cellValue(nx, ny, map);
                     double penalty = 0.0;
@@ -459,7 +512,8 @@ private:
     std::mutex                                            map_mutex_;
     nav_msgs::msg::OccupancyGrid::SharedPtr               map_msg_;
     geometry_msgs::msg::PoseStamped::SharedPtr            latest_goal_pose_;
-    bool                                                  new_goal_set_;
+    bool                                                  new_goal_set_;   // per-goal bookkeeping not yet done
+    bool                                                  plan_pending_;   // goal has no successful plan yet
     int                                                   stall_dir_;
 
     std::unique_ptr<tf2_ros::Buffer>                      tf_buffer_;

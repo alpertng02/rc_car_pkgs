@@ -27,14 +27,18 @@ ekf_filter_node:
                    false, false, false]
     odom0_differential: false
     odom0_queue_size: 10
+    # Mahalanobis gate: drops wheel-twist outliers (slip spikes, encoder
+    # glitches) instead of folding them into the estimate.
+    odom0_twist_rejection_threshold: 3.0
 
     # IMU: only the gyro yaw rate is fused. It replaces the kinematic yaw
     # estimate, which is the weak point of Ackermann odometry during slip and
-    # tight turns. The accelerometer is deliberately NOT fused: the message
-    # carries zero covariance (treated as near-perfect by the filter), so
-    # integrating its noise makes the pose jitter badly. If it is ever
-    # re-enabled (ax -> true), imu0_remove_gravitational_acceleration: true
-    # must be set alongside it.
+    # tight turns. The Gazebo sensor now carries BNO055-derived noise, and the
+    # plugin fills the message covariance from it (gyro ~5.8e-6, accel
+    # ~2.3e-4). The accelerometer is still deliberately NOT fused:
+    # double-integrating consumer-grade accel noise makes the pose jitter
+    # badly. If it is ever re-enabled (ax -> true),
+    # imu0_remove_gravitational_acceleration: true must stay set alongside it.
     imu0: /imu
     imu0_config: [false, false, false,
                   false, false, false,
@@ -44,3 +48,29 @@ ekf_filter_node:
     imu0_differential: false
     imu0_relative: false
     imu0_queue_size: 20
+    imu0_remove_gravitational_acceleration: true
+
+    # Scales process noise with velocity: a stationary car gets a quiet,
+    # stable estimate instead of slowly wandering with integrator noise.
+    dynamic_process_noise_covariance: true
+
+    # Process noise tuned for a small agile RC car (defaults assume a slow,
+    # heavy platform). Raised vx/vy/vyaw and yaw entries: the car can change
+    # speed and heading within a single 200 ms planning tick, so the filter
+    # must trust fresh measurements over its motion model.
+    # State order: [x, y, z, roll, pitch, yaw, vx, vy, vz, vroll, vpitch, vyaw, ax, ay, az]
+    process_noise_covariance: [0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.10, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.10, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.04, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.15, 0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.015]

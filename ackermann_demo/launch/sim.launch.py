@@ -7,6 +7,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, Command
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     pkg_path = get_package_share_directory('ackermann_demo')
@@ -28,8 +29,10 @@ def generate_launch_description():
     
     # Compile URDF with sim_mode enabled
     xacro_file = os.path.join(pkg_path, 'urdf', 'car.urdf.xacro')
+    # ParameterValue(value_type=str) stops launch_ros from YAML-parsing the
+    # URDF, which fails on colons inside XML comments.
     robot_desc = {
-        'robot_description': Command(['xacro ', xacro_file, ' sim_mode:=true'])
+        'robot_description': ParameterValue(Command(['xacro ', xacro_file, ' sim_mode:=true']), value_type=str)
     }
     
     # Robot State Publisher
@@ -105,14 +108,14 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': True,
-            'control_hz': 50.0,
+            'control_hz': 100.0,
             
             # Mechanical Dimensions
             'wheelbase': 0.1688,                  
             'max_steering_angle': 0.523,          
             
             # Tracking Gains
-            'stanley_k': 1.6,                     
+            'stanley_k': 1.8,                     
             'stanley_k_soft': 0.18,               
             
             # Operational Constraints
@@ -125,7 +128,7 @@ def generate_launch_description():
             'max_deceleration': 0.90,             
             'steer_speed_reduction': 0.70,        
             'path_timeout_sec': 20.0,             
-            'ultrasonic_safety_dist': 0.30,       
+            'ultrasonic_safety_dist': 0.20,       
 
             # 🟢 ADDED: Proprioceptive Stall & Wheel Slip Monitoring Configurations
             'stall_velocity_threshold': 0.15,     # Minimum speed command to begin evaluating [m/s]
@@ -141,6 +144,14 @@ def generate_launch_description():
         package='ackermann_demo', executable='lidar_camera_fusion', name='lidar_camera_fusion', output='screen',
         condition=IfCondition(LaunchConfiguration('use_cam_fuse')),
         parameters=[{'use_sim_time': True}]
+    )
+
+    # Accumulates /colored_scan into a persistent voxel map (/colored_map) in the
+    # SLAM map frame — needs use_slam:=true for the map->odom TF
+    cloud_accumulator_node = Node(
+        package='ackermann_demo', executable='cloud_accumulator', name='cloud_accumulator', output='screen',
+        condition=IfCondition(LaunchConfiguration('use_cam_fuse')),
+        parameters=[{'use_sim_time': True, 'target_frame': 'map', 'voxel_size': 0.05}]
     )
 
     # Optional Gamepad & Visualization
@@ -179,6 +190,6 @@ def generate_launch_description():
         game_controller_node, teleop_twist_joy_node, cmd_vel_mux_node,
         slam_toolbox_node,
         astar_planner_node, costmap_node, stanley_controller_node,
-        lidar_camera_fusion_node,
+        lidar_camera_fusion_node, cloud_accumulator_node,
         rviz_node
     ])

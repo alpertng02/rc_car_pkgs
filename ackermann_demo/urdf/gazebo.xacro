@@ -59,6 +59,21 @@
     </plugin>
   </gazebo>
 
+  <!-- Ground-truth pose of base_footprint in the world frame, published on
+       /ground_truth for odometry drift evaluation (scripts/odom_drift_eval.py).
+       Sim-only plugin with zero noise. Keep comments here YAML-benign. -->
+  <gazebo>
+    <plugin name="ground_truth_odom" filename="libgazebo_ros_p3d.so">
+      <ros>
+        <remapping>odom:=ground_truth</remapping>
+      </ros>
+      <body_name>base_footprint</body_name>
+      <frame_name>world</frame_name>
+      <update_rate>50.0</update_rate>
+      <gaussian_noise>0.0</gaussian_noise>
+    </plugin>
+  </gazebo>
+
   <gazebo reference="front_left_steering_joint">
     <implicitSpringDamper>true</implicitSpringDamper>
   </gazebo>

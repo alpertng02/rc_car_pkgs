@@ -22,6 +22,17 @@ ackermann_steering_controller:
     base_frame_id: base_footprint
     enable_odom_tf: false   # odom -> base_footprint TF is owned by the robot_localization EKF (config/ekf.yaml)
 
+    # Honest measurement covariances [x, y, z, roll, pitch, yaw]. Without
+    # these the message carries zeros and robot_localization substitutes a
+    # 1e-6 epsilon, making wheel odometry drown out the IMU. Twist: vx is
+    # well measured by rear encoders, vy is the Ackermann no-slip assumption,
+    # vyaw from kinematics is the weak point (wheel slip in tight turns) so
+    # it stays loose in case it is ever fused. Unobserved 3D axes are huge.
+    # Pose covariance is dead-reckoned (grows unbounded) and not fused by the
+    # EKF; values are nominal.
+    pose_covariance_diagonal: [0.01, 0.01, 1000000.0, 1000000.0, 1000000.0, 0.05]
+    twist_covariance_diagonal: [0.002, 0.005, 1000000.0, 1000000.0, 1000000.0, 0.05]
+
     rear_wheels_names: ["rear_left_wheel_joint", "rear_right_wheel_joint"]
     front_wheels_names: ["front_left_steering_joint", "front_right_steering_joint"]
     

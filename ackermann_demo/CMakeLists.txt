@@ -19,6 +19,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_geometry REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_executable(astar_planner src/astar_planner.cpp)
 ament_target_dependencies(astar_planner rclcpp nav_msgs geometry_msgs std_msgs tf2_ros)
@@ -31,6 +32,9 @@ ament_target_dependencies(stanley_controller rclcpp sensor_msgs geometry_msgs na
 
 add_executable(lidar_camera_fusion src/lidar_camera_fusion.cpp)
 ament_target_dependencies(lidar_camera_fusion rclcpp sensor_msgs tf2_ros tf2_geometry_msgs cv_bridge image_geometry)
+
+add_executable(cloud_accumulator src/cloud_accumulator.cpp)
+ament_target_dependencies(cloud_accumulator rclcpp sensor_msgs tf2_ros tf2_geometry_msgs std_srvs)
 
 add_library(ackermann_demo_hardware SHARED src/ackermann_hardware_interface.cpp)
 
@@ -65,6 +69,12 @@ install(TARGETS
   costmap_node
   stanley_controller
   lidar_camera_fusion
+  cloud_accumulator
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/odom_drift_eval.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

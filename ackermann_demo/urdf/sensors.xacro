@@ -23,10 +23,11 @@
   <gazebo reference="imu_link">
     <sensor name="imu_sensor" type="imu">
       <always_on>true</always_on>
+      <!-- BNO055 NDOF fusion output rate -->
       <update_rate>100.0</update_rate>
       <visualize>true</visualize>
       <topic>__default_topic__</topic>
-      
+
       <plugin name="ackermann_imu_plugin" filename="libgazebo_ros_imu_sensor.so">
         <ros>
           <remapping>~/out:=/imu</remapping>
@@ -35,16 +36,77 @@
         <initial_orientation_as_reference>false</initial_orientation_as_reference>
       </plugin>
 
+      <!-- Bosch BNO055 in NDOF fusion mode (datasheet BST-BNO055-DS000).
+           Gyro noise density 0.014 dps/sqrt(Hz) gives 2.4e-3 rad/s per
+           sample at 100 Hz; 16 LSB/dps gives 1.1e-3 rad/s quantization;
+           bias_stddev models the ~0.05 dps residual left after the fusion's
+           stationary auto-calibration (1 dps uncalibrated).
+           Accel noise density 150 ug/sqrt(Hz) gives 1.5e-2 m/s^2 per sample
+           at 100 Hz; 100 LSB per m/s^2 gives 1e-2 m/s^2 quantization;
+           bias_stddev models a ~8 mg calibrated zero-g offset (datasheet
+           typ. 80 mg uncalibrated).
+           CAUTION keep comments in every xacro YAML-benign (no colon at a
+           line end and no colon followed by a space) because Humble's
+           gazebo_ros2_control feeds the whole URDF through an rcl parameter
+           override rule that is parsed as YAML. -->
       <imu>
         <angular_velocity>
-          <x><type>gaussian</type><mean>0.0</mean><stddev>2e-4</stddev></x>
-          <y><type>gaussian</type><mean>0.0</mean><stddev>2e-4</stddev></y>
-          <z><type>gaussian</type><mean>0.0</mean><stddev>2e-4</stddev></z>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>2.4e-3</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>8.7e-4</bias_stddev>
+              <precision>1.1e-3</precision>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>2.4e-3</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>8.7e-4</bias_stddev>
+              <precision>1.1e-3</precision>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>2.4e-3</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>8.7e-4</bias_stddev>
+              <precision>1.1e-3</precision>
+            </noise>
+          </z>
         </angular_velocity>
         <linear_acceleration>
-          <x><type>gaussian</type><mean>0.0</mean><stddev>1.7e-2</stddev></x>
-          <y><type>gaussian</type><mean>0.0</mean><stddev>1.7e-2</stddev></y>
-          <z><type>gaussian</type><mean>0.0</mean><stddev>1.7e-2</stddev></z>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>1.5e-2</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>7.8e-2</bias_stddev>
+              <precision>1.0e-2</precision>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>1.5e-2</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>7.8e-2</bias_stddev>
+              <precision>1.0e-2</precision>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>1.5e-2</stddev>
+              <bias_mean>0.0</bias_mean>
+              <bias_stddev>7.8e-2</bias_stddev>
+              <precision>1.0e-2</precision>
+            </noise>
+          </z>
         </linear_acceleration>
       </imu>
     </sensor>
