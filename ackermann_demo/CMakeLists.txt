@@ -20,12 +20,21 @@ find_package(cv_bridge REQUIRED)
 find_package(image_geometry REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(OpenCV REQUIRED)
 
 add_executable(astar_planner src/astar_planner.cpp)
 ament_target_dependencies(astar_planner rclcpp nav_msgs geometry_msgs std_msgs tf2_ros)
 
+add_executable(ackermann_astar_planner src/ackermann_astar_planner.cpp)
+ament_target_dependencies(ackermann_astar_planner rclcpp nav_msgs geometry_msgs std_msgs tf2_ros)
+
 add_executable(costmap_node src/costmap_node.cpp)
 ament_target_dependencies(costmap_node rclcpp nav_msgs)
+
+add_executable(voronoi_costmap src/voronoi_costmap.cpp)
+ament_target_dependencies(voronoi_costmap rclcpp nav_msgs)
+target_include_directories(voronoi_costmap PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(voronoi_costmap ${OpenCV_LIBS})
 
 add_executable(stanley_controller src/stanley_controller.cpp)
 ament_target_dependencies(stanley_controller rclcpp sensor_msgs geometry_msgs nav_msgs std_msgs tf2_ros)
@@ -66,7 +75,9 @@ install(
 
 install(TARGETS
   astar_planner
+  ackermann_astar_planner
   costmap_node
+  voronoi_costmap
   stanley_controller
   lidar_camera_fusion
   cloud_accumulator

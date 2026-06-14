@@ -7,6 +7,8 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <utility>
+#include <vector>
 
 #include "geometry_msgs/msg/twist_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -37,25 +39,33 @@ public:
         is_stalled_(false),
         stall_start_x_(0.0),
         stall_start_y_(0.0) {
-        
+
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         // Parameter declarations
         this->declare_parameter("control_hz", 50.0);
-        this->declare_parameter("wheelbase", 0.1688);         
-        this->declare_parameter("stanley_k", 1.3);            
-        this->declare_parameter("stanley_k_soft", 0.15);      
-        this->declare_parameter("max_steering_angle", 0.523);  
-        this->declare_parameter("max_linear_velocity", 0.70);  
-        this->declare_parameter("max_reverse_velocity", 0.45); 
-        this->declare_parameter("goal_tolerance", 0.25);       
-        this->declare_parameter("max_acceleration", 0.50);     
-        this->declare_parameter("max_deceleration", 0.90);     
-        this->declare_parameter("steer_speed_reduction", 0.40); 
-        this->declare_parameter("path_timeout_sec", 3.0);      
-        this->declare_parameter("ultrasonic_safety_dist", 0.35); 
-        
+        this->declare_parameter("wheelbase", 0.1688);
+        this->declare_parameter("stanley_k", 1.3);
+        this->declare_parameter("stanley_k_soft", 0.15);
+        this->declare_parameter("max_steering_angle", 0.523);
+        this->declare_parameter("max_linear_velocity", 0.70);
+        this->declare_parameter("max_reverse_velocity", 0.45);
+        this->declare_parameter("goal_tolerance", 0.25);
+        this->declare_parameter("goal_yaw_tolerance", 0.35);   // accept the goal heading within ~20°
+        this->declare_parameter("max_acceleration", 0.50);
+        this->declare_parameter("max_deceleration", 0.90);
+        this->declare_parameter("steer_speed_reduction", 0.40);
+        this->declare_parameter("reverse_steer_speed_reduction", 0.40);  // speed cut per steer fraction while reversing
+        this->declare_parameter("path_timeout_sec", 3.0);
+        this->declare_parameter("ultrasonic_safety_dist", 0.35);
+
+        // Cusp handoff: switch to the next motion segment only once the chassis
+        // has PHYSICALLY stopped, gated on measured wheel speed (not the command
+        // ramp), with a timeout fail-safe if odometry never reads a clean zero.
+        this->declare_parameter("cusp_settle_speed", 0.03);    // measured wheel speed treated as standstill [m/s]
+        this->declare_parameter("cusp_settle_timeout", 2.0);   // hand off anyway after this long at the cusp [s]
+
         // Stall parameters
         this->declare_parameter("stall_velocity_threshold", 0.15);
         this->declare_parameter("stall_timeout_sec", 1.5);
@@ -87,25 +97,58 @@ public:
         stall_pub_ = this->create_publisher<std_msgs::msg::Int8>("/robot_stall", 10);
 
         double initial_hz = this->get_parameter("control_hz").as_double();
-        if (initial_hz <= 0.0) initial_hz = 50.0; 
-        
+        if (initial_hz <= 0.0) initial_hz = 50.0;
+
         std::chrono::milliseconds timer_period_ms(static_cast<int>(1000.0 / initial_hz));
         control_timer_ = this->create_wall_timer(
             timer_period_ms, std::bind(&StanleyControllerNode::controlLoop, this));
 
         last_path_time_ = this->now();
         path_receive_time_ = this->now();
-        
+
         RCLCPP_INFO(this->get_logger(), "🏎️ Stanley Controller Online with Smooth Escape Pipelines.");
     }
 
 private:
+    // Split the path into maximal runs of one travel direction. Cusps (the
+    // planner zeroes velocity there) and the endpoints are segment boundaries,
+    // so a reverse-curve plan from the Hybrid A* RS expansion becomes a clean
+    // sequence of forward/reverse segments the tracker can follow one at a time.
+    void computeSegments(const nav_msgs::msg::Path& path) {
+        segments_.clear(); seg_dir_.clear();
+        const size_t N = path.poses.size();
+        if (N == 0) return;
+        std::vector<int> dir(N, 0);
+        int last = 0;
+        for (size_t i = 0; i < N; ++i) {
+            const double vz = path.poses[i].pose.position.z;
+            int s = (vz > 1e-6) ? 1 : (vz < -1e-6 ? -1 : 0);
+            if (s != 0) last = s;
+            dir[i] = (s != 0) ? s : last;     // zeros inherit the preceding direction
+        }
+        if (last == 0) { segments_.push_back({ 0, N - 1 }); seg_dir_.push_back(1); return; }
+        if (dir[0] == 0) {                    // back-fill leading zeros (path starts at rest)
+            int first = 1;
+            for (size_t i = 0; i < N; ++i) if (dir[i] != 0) { first = dir[i]; break; }
+            for (size_t i = 0; i < N && dir[i] == 0; ++i) dir[i] = first;
+        }
+        size_t start = 0;
+        for (size_t i = 1; i < N; ++i) {
+            if (dir[i] != dir[start]) {
+                segments_.push_back({ start, i - 1 }); seg_dir_.push_back(dir[start]);
+                start = i;
+            }
+        }
+        segments_.push_back({ start, N - 1 }); seg_dir_.push_back(dir[start]);
+    }
+
     void pathCallback(const nav_msgs::msg::Path::SharedPtr msg) {
         std::lock_guard<std::mutex> lock(path_mutex_);
         if (msg->poses.empty()) {
             has_path_ = false;
             current_path_ = nullptr;
             current_speed_ = 0.0;
+            segments_.clear(); seg_dir_.clear(); current_seg_ = 0;
             return;
         }
         // The planner re-sends the unchanged plan (same stamp) as a keep-alive:
@@ -116,6 +159,9 @@ private:
             return;
         }
         current_path_ = msg;
+        computeSegments(*msg);
+        current_seg_ = 0;
+        seg_end_settling_ = false;
         target_wp_idx_ = 0;
         // current_speed_ is deliberately not reset so the speed ramp stays continuous over replans
         has_path_ = true;
@@ -144,7 +190,7 @@ private:
         // residual is the dynamic part of the forward acceleration. A faster EMA
         // of its magnitude gives "is the chassis physically moving", and a
         // peak-hold catches impact spikes between control cycles.
-        constexpr double BIAS_ALPHA     = 0.002;  // ~5 s at 100 Hz
+        constexpr double BIAS_ALPHA = 0.002;  // ~5 s at 100 Hz
         constexpr double ACTIVITY_ALPHA = 0.05;   // ~0.2 s at 100 Hz
         accel_bias_ += BIAS_ALPHA * (msg->linear_acceleration.x - accel_bias_);
         const double dyn = std::abs(msg->linear_acceleration.x - accel_bias_);
@@ -192,9 +238,12 @@ private:
         const double max_accel = this->get_parameter("max_acceleration").as_double();
         const double max_decel = this->get_parameter("max_deceleration").as_double();
         const double steer_reduce = this->get_parameter("steer_speed_reduction").as_double();
+        const double rev_steer_reduce = this->get_parameter("reverse_steer_speed_reduction").as_double();
         const double path_timeout = this->get_parameter("path_timeout_sec").as_double();
         const double safety_dist = this->get_parameter("ultrasonic_safety_dist").as_double();
-        
+        const double cusp_settle_speed = this->get_parameter("cusp_settle_speed").as_double();
+        const double cusp_settle_timeout = this->get_parameter("cusp_settle_timeout").as_double();
+
         const double stall_v_thresh = this->get_parameter("stall_velocity_threshold").as_double();
         const double stall_timeout = this->get_parameter("stall_timeout_sec").as_double();
         const double stall_disp_thresh = this->get_parameter("stall_displacement_threshold").as_double();
@@ -212,14 +261,6 @@ private:
             local_has_path = has_path_;
         }
 
-        if (local_has_path) {
-            const double age = (this->now() - last_path_time_).seconds();
-            if (age > path_timeout) {
-                publishStop();
-                return;
-            }
-        }
-
         double robot_x, robot_y, robot_yaw;
         try {
             auto tf = tf_buffer_->lookupTransform("map", "base_footprint", tf2::TimePointZero);
@@ -229,7 +270,7 @@ private:
                 tf.transform.rotation.x, tf.transform.rotation.y,
                 tf.transform.rotation.z, tf.transform.rotation.w);
         } catch (const tf2::TransformException&) {
-            return;  
+            return;
         }
 
         if (!local_has_path || !local_path || local_path->poses.empty()) {
@@ -237,66 +278,88 @@ private:
             return;
         }
 
-        const size_t N = local_path->poses.size();
+        const double half_wb = 0.5 * wheelbase;
 
-        const double goal_x = local_path->poses.back().pose.position.x;
-        const double goal_y = local_path->poses.back().pose.position.y;
-        if (std::hypot(goal_x - robot_x, goal_y - robot_y) < goal_tol) {
-            RCLCPP_INFO(this->get_logger(), "🏁 Goal reached. Halting.");
+        const auto& goal_pose = local_path->poses.back().pose;
+        const double goal_x = goal_pose.position.x;
+        const double goal_y = goal_pose.position.y;
+        const double dist_to_goal = std::hypot(goal_x - robot_x, goal_y - robot_y);
+
+        // Watchdog: stop on a stale plan — but exempt the final approach, where
+        // the planner intentionally drops the keep-alive once we are within its
+        // arrival tolerance while we still close to our tighter goal_tolerance.
+        if (local_has_path) {
+            const double age = (this->now() - last_path_time_).seconds();
+            if (age > path_timeout && dist_to_goal > 0.40) {
+                publishStop();
+                return;
+            }
+        }
+
+        // Goal reached once the car has actually SETTLED at the path end.
+        const double goal_yaw = quaternionToYaw(goal_pose.orientation.x, goal_pose.orientation.y,
+            goal_pose.orientation.z, goal_pose.orientation.w);
+        const double goal_yaw_err = std::abs(normalizeAngle(goal_yaw - robot_yaw));
+        if (dist_to_goal < goal_tol && std::abs(current_speed_) < 0.05) {
+            RCLCPP_INFO(this->get_logger(), "🏁 Goal reached (heading err %.1f°). Halting.",
+                goal_yaw_err * 180.0 / M_PI);
             publishStop();
             std::lock_guard<std::mutex> lock(path_mutex_);
             has_path_ = false;
             current_path_ = nullptr;
+            segments_.clear(); seg_dir_.clear(); current_seg_ = 0;
             return;
         }
 
-        target_wp_idx_ = std::min(target_wp_idx_, N - 1);
+        // Segment-aware tracking: stay within the current motion segment
+        if (segments_.empty()) { publishStop(); return; }
+        current_seg_ = std::min(current_seg_, segments_.size() - 1);
+        const size_t seg_s = segments_[current_seg_].first;
+        const size_t seg_e = segments_[current_seg_].second;
+        target_wp_idx_ = std::clamp(target_wp_idx_, seg_s, seg_e);
+        const bool reversing = (seg_dir_[current_seg_] < 0);
 
-        // The motion direction comes from the first non-zero commanded velocity at or
-        // after the target waypoint: zero entries (path end) carry no direction, and
-        // looking ahead lets the sign flip as a cusp is reached.
-        auto signedVelFrom = [&local_path, N](size_t from) {
-            for (size_t i = from; i < N; ++i) {
-                const double vz = local_path->poses[i].pose.position.z;
-                if (std::abs(vz) > 1e-6) return vz;
-            }
-            return 0.0;
-        };
-        const bool reversing = (signedVelFrom(target_wp_idx_) < 0.0);
-
+        // Hybrid reference. The path is the REAR-AXLE trajectory (exact bicycle kinematics).
+        // Forward uses front-axle Stanley for crisp heading. Reverse tracks the rear axle.
         double ref_x, ref_y, motion_yaw;
         if (!reversing) {
-            ref_x = robot_x + wheelbase * std::cos(robot_yaw);
-            ref_y = robot_y + wheelbase * std::sin(robot_yaw);
+            ref_x = robot_x + half_wb * std::cos(robot_yaw);   // front axle = centre + L/2
+            ref_y = robot_y + half_wb * std::sin(robot_yaw);
             motion_yaw = robot_yaw;
         } else {
-            // 🟢 FIXED: base_footprint sits directly on the rear axle center.
-            // Erased the translation calculation to point directly to robot chassis frame origins.
-            ref_x = robot_x;
-            ref_y = robot_y;
+            ref_x = robot_x - half_wb * std::cos(robot_yaw);   // rear axle = centre - L/2
+            ref_y = robot_y - half_wb * std::sin(robot_yaw);
             motion_yaw = normalizeAngle(robot_yaw + M_PI);
         }
 
-        const size_t search_start = (target_wp_idx_ > 4) ? target_wp_idx_ - 4 : 0;
-        const size_t search_end = std::min(N - 1, target_wp_idx_ + 30);
+        auto track_pt = [&](size_t i, double& tx, double& ty) {
+            const auto& wp = local_path->poses[i].pose;
+            if (!reversing) {
+                double th = quaternionToYaw(wp.orientation.x, wp.orientation.y, wp.orientation.z, wp.orientation.w);
+                tx = wp.position.x + wheelbase * std::cos(th);
+                ty = wp.position.y + wheelbase * std::sin(th);
+            } else {
+                tx = wp.position.x; ty = wp.position.y;
+            }
+        };
+
+        const size_t search_start = (target_wp_idx_ > seg_s + 4) ? target_wp_idx_ - 4 : seg_s;
+        const size_t search_end = std::min(seg_e, target_wp_idx_ + 30);
 
         double min_dist = std::numeric_limits<double>::max();
         size_t best_idx = target_wp_idx_;
-
         for (size_t i = search_start; i <= search_end; ++i) {
-            const double dx = local_path->poses[i].pose.position.x - ref_x;
-            const double dy = local_path->poses[i].pose.position.y - ref_y;
-            const double d = std::hypot(dx, dy);
+            double tx, ty; track_pt(i, tx, ty);
+            const double d = std::hypot(tx - ref_x, ty - ref_y);
             if (d < min_dist) { min_dist = d; best_idx = i; }
         }
         target_wp_idx_ = best_idx;
-        const double path_vel_raw = signedVelFrom(target_wp_idx_);
+        const double path_vel_raw = local_path->poses[target_wp_idx_].pose.position.z;
 
-        const size_t next_idx = std::min(target_wp_idx_ + 1, N - 1);
-        const double cur_wx = local_path->poses[target_wp_idx_].pose.position.x;
-        const double cur_wy = local_path->poses[target_wp_idx_].pose.position.y;
-        const double nxt_wx = local_path->poses[next_idx].pose.position.x;
-        const double nxt_wy = local_path->poses[next_idx].pose.position.y;
+        const size_t next_idx = std::min(target_wp_idx_ + 1, seg_e);
+        double cur_wx, cur_wy, nxt_wx, nxt_wy;
+        track_pt(target_wp_idx_, cur_wx, cur_wy);
+        track_pt(next_idx, nxt_wx, nxt_wy);
 
         double path_tangent;
         if (std::hypot(nxt_wx - cur_wx, nxt_wy - cur_wy) > 1e-5) {
@@ -318,19 +381,51 @@ private:
         const double v_eff = std::max(std::abs(path_vel_raw), stanley_k_soft);
         const double cte_term = std::atan2(stanley_k * cte, v_eff);
         const double raw_delta = heading_error + cte_term;
-        double steering_angle = std::clamp(raw_delta, -max_steer, max_steer);
-
-        if (reversing) steering_angle = -steering_angle;
+        const double steering_angle = std::clamp(raw_delta, -max_steer, max_steer);
 
         const double v_limit = reversing ? max_v_rev : max_v_fwd;
         double speed_target = std::clamp(path_vel_raw, -v_limit, v_limit);
+
+        // =====================================================================
+        // 1. KINEMATIC REDUCTIONS
+        // =====================================================================
+
+        // Steering speed reduction
+        const double steer_ratio = std::abs(steering_angle) / max_steer;
+        const double reduce = reversing ? rev_steer_reduce : steer_reduce;
+        const double speed_scale = std::max(0.20, 1.0 - reduce * steer_ratio);
+        speed_target *= speed_scale;
+
+        // Cusp approach and stop
+        const bool cusp_ahead = (current_seg_ + 1 < segments_.size());
+        const bool at_seg_end = (target_wp_idx_ >= seg_e);
+
+        if (cusp_ahead) {
+            const auto& cusp_pose = local_path->poses[seg_e].pose;
+            const double dist_to_cusp = std::hypot(cusp_pose.position.x - robot_x,
+                cusp_pose.position.y - robot_y);
+
+            // Kinematic braking curve: v = sqrt(2 * a * d)
+            const double safe_approach_speed = std::sqrt(2.0 * (max_decel * 0.8) * std::max(0.0, dist_to_cusp));
+
+            // Clamp the target speed to the braking curve, preserving travel direction (sign)
+            if (std::abs(speed_target) > safe_approach_speed) {
+                speed_target = (speed_target > 0.0) ? safe_approach_speed : -safe_approach_speed;
+            }
+
+            // Hard stop precisely at the end of the segment
+            if (at_seg_end) speed_target = 0.0;
+        }
+
+        // =====================================================================
+        // 2. SENSOR & STATE GATHERING
+        // =====================================================================
 
         double current_range = std::numeric_limits<double>::max();
         {
             std::lock_guard<std::mutex> lock(ultrasonic_mutex_);
             current_range = latest_range_;
         }
-
         const bool ultrasonic_block = (!reversing && current_range < safety_dist);
 
         double accel_activity, accel_peak;
@@ -340,19 +435,21 @@ private:
             accel_peak = accel_peak_;
             accel_peak_ = 0.0;   // peak-hold is consumed once per control cycle
         }
+
         double wheel_speed;
         {
             std::lock_guard<std::mutex> lock(wheel_odom_mutex_);
             wheel_speed = std::abs(latest_wheel_speed_);
         }
 
-        // 1.0 second motor spin-up grace window right after plan switches
-        // to prevent zero-displacement false flags while gears drop into reverse.
         bool plan_grace_active = (this->now() - path_receive_time_).seconds() < 1.0;
 
-        // The stall check runs on the desired speed *before* the ultrasonic override:
-        // an obstacle that holds the car still must still arm the stall timer, so the
-        // escape replan fires instead of the car waiting in place forever.
+        // =====================================================================
+        // 3. STALL DETECTION
+        // =====================================================================
+
+        // We now check against the INTENDED kinematic speed, avoiding false flags
+        // when the car is intentionally creeping through a curve or braking for a cusp.
         if (std::abs(speed_target) >= stall_v_thresh && !plan_grace_active) {
             if (!stall_timer_started_) {
                 stall_start_x_ = robot_x;
@@ -371,22 +468,15 @@ private:
                 if (accel_peak > collision_accel_thresh) {
                     stall_cause = "impact spike on IMU";
                 } else if (wheels_dead_seconds > stall_timeout) {
-                    // Wheel odometry never turned: detected without the map TF, so
-                    // this path survives localization freezes and SLAM jumps.
-                    stall_cause = ultrasonic_block ? "held by ultrasonic obstacle"
-                                                   : "drivetrain not turning";
+                    stall_cause = ultrasonic_block ? "held by ultrasonic obstacle" : "drivetrain not turning";
                 } else if (traveled_distance > stall_disp_thresh) {
                     stall_start_x_ = robot_x;
                     stall_start_y_ = robot_y;
                     stall_start_time_ = this->now();
                 } else if (elapsed_seconds > stall_timeout) {
                     if (accel_activity < stall_accel_thresh) {
-                        stall_cause = (wheel_speed >= stall_odom_thresh)
-                            ? "wheels slipping in place" : "no displacement";
+                        stall_cause = (wheel_speed >= stall_odom_thresh) ? "wheels slipping in place" : "no displacement";
                     } else {
-                        // The IMU says the chassis is physically moving while the map
-                        // pose says it is not: distrust the pose rather than forcing
-                        // an escape maneuver from a position that may be wrong.
                         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
                             "No map displacement but IMU activity is %.3f m/s²; suspecting localization, holding off stall.",
                             accel_activity);
@@ -395,13 +485,10 @@ private:
 
                 if (stall_cause) {
                     is_stalled_ = true;
-
                     std_msgs::msg::Int8 stall_msg;
                     stall_msg.data = reversing ? -1 : 1;
                     stall_pub_->publish(stall_msg);
-
-                    RCLCPP_ERROR(this->get_logger(),
-                        "STALL (%s) while commanding %s motion. Requesting escape replan.",
+                    RCLCPP_ERROR(this->get_logger(), "STALL (%s) while commanding %s motion. Requesting escape replan.",
                         stall_cause, reversing ? "reverse" : "forward");
                 }
             }
@@ -413,10 +500,16 @@ private:
             publishStop();
             std::lock_guard<std::mutex> lock(path_mutex_);
             has_path_ = false;
-            current_path_ = nullptr; 
+            current_path_ = nullptr;
             return;
         }
 
+        // =====================================================================
+        // 4. ULTRASONIC OVERRIDE & EXECUTION
+        // =====================================================================
+
+        // This runs after the stall detector. If we are blocked while trying to move fast,
+        // the stall timer will keep ticking in the background until it triggers an escape.
         if (ultrasonic_block) {
             speed_target = 0.0;
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
@@ -424,12 +517,9 @@ private:
                 current_range, safety_dist);
         }
 
-        const double steer_ratio = std::abs(steering_angle) / max_steer;
-        const double speed_scale = std::max(0.20, 1.0 - steer_reduce * steer_ratio);
-        speed_target *= speed_scale;
-
         const double dv_desired = speed_target - current_speed_;
-        const bool decelerating = (dv_desired * current_speed_ <= 0.0) || (std::abs(speed_target) < std::abs(current_speed_));
+        const bool decelerating = (current_speed_ != 0.0 && dv_desired * current_speed_ < 0.0)
+            || (std::abs(speed_target) < std::abs(current_speed_));
         const double rate = decelerating ? max_decel : max_accel;
         const double dv_cap = rate * dt;
         current_speed_ += std::clamp(dv_desired, -dv_cap, dv_cap);
@@ -438,18 +528,59 @@ private:
         cmd.header.stamp = this->now();
         cmd.header.frame_id = "base_footprint";
         cmd.twist.linear.x = current_speed_;
-        cmd.twist.angular.z = steering_angle;
+
+        // Explicitly invert steering for reverse.
+        // Because our correct kinematic yaw-rate conversion cancels out the velocity sign 
+        // inside the Ackermann controller, we no longer get a "free" sign flip.
+        const double active_steer = reversing ? -steering_angle : steering_angle;
+
+        // Convert steering angle to proper yaw rate for AckermannSteeringController
+        // Prevents division-by-zero wheel slams at extremely low approach speeds
+        if (std::abs(current_speed_) > 0.01) {
+            cmd.twist.angular.z = (current_speed_ * std::tan(active_steer)) / wheelbase;
+        } else {
+            cmd.twist.angular.z = 0.0; // Hold steering steady when practically stopped
+        }
+
         cmd_pub_->publish(cmd);
+
+        // Cusp handoff: switch to the next forward/reverse segment only once the
+        // car has PHYSICALLY come to rest. current_speed_ is the internal command
+        // ramp and reaches ~0 a beat before the chassis actually stops; handing
+        // off on it alone flipped the steering to the next segment's direction
+        // while the car was still rolling through the cusp, throwing it off path.
+        // We wait for the measured wheel speed to confirm standstill, with a
+        // timeout fail-safe in case odometry never reports a clean zero.
+        if (cusp_ahead && at_seg_end && std::abs(current_speed_) < 0.001) {
+            if (!seg_end_settling_) {
+                seg_end_settling_ = true;
+                seg_end_stop_time_ = this->now();
+            }
+            const double settle_elapsed = (this->now() - seg_end_stop_time_).seconds();
+            if (wheel_speed < cusp_settle_speed || settle_elapsed > cusp_settle_timeout) {
+                current_seg_++;
+                target_wp_idx_ = segments_[current_seg_].first;
+                path_receive_time_ = this->now();   // reset the grace window for the new segment
+                seg_end_settling_ = false;
+            }
+        } else {
+            seg_end_settling_ = false;
+        }
     }
 
     size_t        target_wp_idx_;
     bool          has_path_;
-    double        current_speed_;     
+    double        current_speed_;
     rclcpp::Time  last_path_time_;
-    rclcpp::Time  path_receive_time_; // 🟢 Added state asset tracking
+    rclcpp::Time  path_receive_time_;
 
     std::mutex                         path_mutex_;
     nav_msgs::msg::Path::SharedPtr     current_path_;
+    std::vector<std::pair<size_t, size_t>> segments_;   // [start,end] index of each motion segment
+    std::vector<int>                   seg_dir_;         // +1 forward / -1 reverse per segment
+    size_t                             current_seg_ = 0; // segment currently being tracked
+    bool                               seg_end_settling_ = false; // waiting for a physical stop at a cusp
+    rclcpp::Time                       seg_end_stop_time_;        // when the command ramp first hit zero at the cusp
 
     std::mutex                         ultrasonic_mutex_;
     double                             latest_range_;

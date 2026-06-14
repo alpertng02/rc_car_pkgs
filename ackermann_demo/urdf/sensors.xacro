@@ -229,6 +229,10 @@
   <joint name="ultrasonic_joint" type="fixed">
     <parent link="chassis"/>
     <child link="ultrasonic_link"/>
+    <!-- Mount clear of the chassis collision box whose front face is at x=0.11.
+         A ray origin on or inside that box makes the sensor detect the car's own
+         body and report min_range 0.02 m forever, permanently blocking forward
+         motion. (Keep this comment colon-free; the URDF is YAML-parsed.) -->
     <origin xyz="0.11 0 -0.01" rpy="0 0 0"/>
   </joint>
 
@@ -267,14 +271,14 @@
           </vertical>
         </scan>
         <range>
-          <min>0.02</min> 
+          <min>0.03</min> 
           <max>4.0</max>  
           <resolution>0.01</resolution>
         </range>
         <noise>
           <type>gaussian</type>
           <mean>0.0</mean>
-          <stddev>0.03</stddev>
+          <stddev>0.025</stddev>
         </noise>
       </ray>
       <plugin name="ultrasonic_sensor" filename="libgazebo_ros_ray_sensor.so">
