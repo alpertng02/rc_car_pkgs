@@ -109,8 +109,10 @@ public:
         this->declare_parameter("escape_radius",         0.50);
         this->declare_parameter("goal_yaw_tolerance_deg", 15.0);
 
+        // Latched QoS to match costmap_node's transient-local publisher, so a
+        // late-joining planner immediately receives the most recent costmap.
         map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-            "/inflated_costmap", 10,
+            "/inflated_costmap", rclcpp::QoS(1).reliable().transient_local(),
             std::bind(&AStarPlannerNode::mapCallback, this, std::placeholders::_1));
 
         goal_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(

@@ -116,7 +116,12 @@ def generate_launch_description():
     costmap_node = Node(
         package='ackermann_demo', executable='costmap_node', name='costmap_node', output='screen',
         condition=IfCondition(LaunchConfiguration('use_nav')),
-        parameters=[{'use_sim_time': True, 'robot_radius': 0.16, 'safety_margin': 0.40}]
+        parameters=[{
+            'use_sim_time': True,
+            'robot_radius': 0.18, 
+            'safety_margin': 0.50,
+            'decay': 'exponential' 
+        }]
     )
 
 

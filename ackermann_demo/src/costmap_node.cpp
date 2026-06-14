@@ -1,152 +1,196 @@
-#include <cmath>
-#include <vector>
-#include <memory>
+/**
+ *@brief costmap_node.cpp
+ *
+ */
+
+
+ // Inflates the SLAM occupancy grid into a graded costmap for the planners:
+ //   • cells within robot_radius of an obstacle  -> lethal (100)
+ //   • cells within the safety_margin cushion    -> graded cost (99..1)
+ //   • everything else                           -> free (0); unknown stays -1
+
+
 #include <algorithm>
-#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 
-// Structural container to hold relative mask properties
-struct MaskOffset {
-    int dx;
-    int dy;
-    int8_t cost;
-};
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
 
 class CostmapInflationNode : public rclcpp::Node {
 public:
-    CostmapInflationNode() : Node("costmap_inflation_node"), last_inflation_cells_(-1), params_changed_(false) {
-        // Declare live tunable physical configuration parameters (in meters)
-        this->declare_parameter("robot_radius", 0.25);     // Physical radius of the vehicle chassis
-        this->declare_parameter("safety_margin", 0.25);    // Width of the decaying cost cushion zone
+    CostmapInflationNode() : Node("costmap_inflation_node") {
+        // Parameters
+        this->declare_parameter("robot_radius", 0.25);  // lethal inscribed radius
+        this->declare_parameter("safety_margin", 0.25);  // graded cushion width beyond the radius
+        this->declare_parameter("occupied_threshold", 65);    // cell value treated as a hard obstacle
+        this->declare_parameter("decay", std::string("linear"));  // "linear" | "exponential"
+        this->declare_parameter("cost_scaling_factor", 10.0);  // exponential steepness [1/m] (decay="exponential")
+        this->declare_parameter("min_recompute_period", 1.0);   // throttle heavy recompute [s]
 
-        robot_radius_ = this->get_parameter("robot_radius").as_double();
-        safety_margin_ = this->get_parameter("safety_margin").as_double();
+        const double period = std::max(0.05, this->get_parameter("min_recompute_period").as_double());
 
-        // Register the runtime parameter reconfiguration callback handle
         param_callback_handle_ = this->add_on_set_parameters_callback(
             std::bind(&CostmapInflationNode::onParameterChange, this, std::placeholders::_1));
 
-        // Setup Pub/Sub topology pipeline links
+        // Latched, reliable QoS: late-joining
+        // programs can immediately receive the most recent costmap.
+        auto latched = rclcpp::QoS(1).reliable().transient_local();
+        costmap_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/inflated_costmap", latched);
         map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-            "/map", 10, std::bind(&CostmapInflationNode::mapCallback, this, std::placeholders::_1));
-        
-        costmap_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/inflated_costmap", 10);
+            "/map", latched, std::bind(&CostmapInflationNode::mapCallback, this, std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "🛡️ Graded Costmap Inflation Node Online & Tunable!");
+        timer_ = this->create_wall_timer(
+            std::chrono::duration<double>(period), std::bind(&CostmapInflationNode::onTimer, this));
+
+        RCLCPP_INFO(this->get_logger(),
+            "Costmap inflation node online (%.2fs throttle) -> /inflated_costmap", period);
     }
 
 private:
-    // ✅ Parameter Callback: Catches updates live from command line or dashboards
-    rcl_interfaces::msg::SetParametersResult onParameterChange(const std::vector<rclcpp::Parameter> &parameters) {
+    // Validate live parameter edits and request a recompute.
+    rcl_interfaces::msg::SetParametersResult onParameterChange(
+        const std::vector<rclcpp::Parameter>& params) {
         rcl_interfaces::msg::SetParametersResult result;
         result.successful = true;
-
-        for (const auto &param : parameters) {
-            if (param.get_name() == "robot_radius") {
-                robot_radius_ = param.as_double();
-                params_changed_ = true;
-                RCLCPP_INFO(this->get_logger(), "🔧 Parameter updated: robot_radius = %.3fm", robot_radius_);
-            }
-            if (param.get_name() == "safety_margin") {
-                safety_margin_ = param.as_double();
-                params_changed_ = true;
-                RCLCPP_INFO(this->get_logger(), "🔧 Parameter updated: safety_margin = %.3fm", safety_margin_);
+        for (const auto& p : params) {
+            const auto& name = p.get_name();
+            if (name == "robot_radius" || name == "safety_margin") {
+                if (p.as_double() < 0.0) {
+                    result.successful = false;
+                    result.reason = name + " must be >= 0";
+                }
+            } else if (name == "cost_scaling_factor") {
+                if (p.as_double() <= 0.0) {
+                    result.successful = false;
+                    result.reason = "cost_scaling_factor must be > 0";
+                }
+            } else if (name == "occupied_threshold") {
+                const long v = p.as_int();
+                if (v < 1 || v > 100) {
+                    result.successful = false;
+                    result.reason = "occupied_threshold must be in [1, 100]";
+                }
+            } else if (name == "decay") {
+                const std::string v = p.as_string();
+                if (v != "linear" && v != "exponential") {
+                    result.successful = false;
+                    result.reason = "decay must be \"linear\" or \"exponential\"";
+                }
             }
         }
+        if (result.successful) dirty_ = true;   // apply on the next timer tick
         return result;
     }
 
-    // ✅ Graded Cost Precomputation: Generates cost value distributions based on distance
-    void precomputeMask(double resolution) {
-        mask_offsets_.clear();
-
-        for (int dx = -inflation_cells_; dx <= inflation_cells_; ++dx) {
-            for (int dy = -inflation_cells_; dy <= inflation_cells_; ++dy) {
-                // Calculate physical distance in meters to match vehicle dimension scaling
-                double distance = std::hypot(dx, dy) * resolution;
-
-                if (distance <= robot_radius_) {
-                    // 💥 Inside vehicle perimeter: Explicitly mark as a Lethal Obstacle
-                    mask_offsets_.push_back({dx, dy, 100});
-                } 
-                else if (distance <= (robot_radius_ + safety_margin_)) {
-                    // 📉 Inside cushion perimeter: Smooth linear decay cost calculation (99 down to 1)
-                    if (safety_margin_ > 0.001) {
-                        double factor = ((robot_radius_ + safety_margin_) - distance) / safety_margin_;
-                        int8_t graded_cost = static_cast<int8_t>(1 + std::round(factor * 98));
-                        mask_offsets_.push_back({dx, dy, graded_cost});
-                    }
-                }
-            }
-        }
-    }
-
+    // Receive the latest map
     void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
-        double resolution = msg->info.resolution;
-        if (resolution <= 0.0) return;
-
-        double total_inflation_distance = robot_radius_ + safety_margin_;
-        int current_inflation_cells = static_cast<int>(std::ceil(total_inflation_distance / resolution));
-
-        // Recompute the look-up footprint array if resolution or live parameters change
-        if (current_inflation_cells != last_inflation_cells_ || params_changed_) {
-            inflation_cells_ = current_inflation_cells;
-            precomputeMask(resolution);
-            last_inflation_cells_ = inflation_cells_;
-            params_changed_ = false;
-            
-            RCLCPP_INFO(this->get_logger(), 
-                "🛡️ Costmap Mask Regenerated: Core lethal radius uses %d cells.", inflation_cells_);
-        }
-
-        int width = msg->info.width;
-        int height = msg->info.height;
-
-        // Initialize output payload as a deep copy of the raw environment base map structural layout
-        auto inflated_msg = std::make_shared<nav_msgs::msg::OccupancyGrid>(*msg);
-
-        // Process the array topology map
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                int base_idx = x + (y * width);
-
-                // Find solid obstacles inside the immutable input buffer data stream
-                if (msg->data[base_idx] == 100) {
-                    for (const auto& offset : mask_offsets_) {
-                        int nx = x + offset.dx;
-                        int ny = y + offset.dy;
-
-                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                            int target_idx = nx + (ny * width);
-                            int8_t original_cell_value = msg->data[target_idx];
-
-                            // Skip processing for hard walls and unknown unmapped territories (-1)
-                            if (original_cell_value == -1 || original_cell_value == 100) continue;
-
-                            // Keeping the maximum cost penalty prevents overlapping masks from diluting wall weights
-                            inflated_msg->data[target_idx] = std::max(inflated_msg->data[target_idx], offset.cost);
-                        }
-                    }
-                }
-            }
-        }
-        costmap_pub_->publish(*inflated_msg);
+        latest_map_ = msg;
+        dirty_ = true;
     }
 
-    // Class Attributes
-    double robot_radius_;
-    double safety_margin_;
-    int inflation_cells_;
-    int last_inflation_cells_;
-    std::atomic<bool> params_changed_;
+    // Check if a new map arrived. Only trigger an update if map changes to save CPU .
+    void onTimer() {
+        if (!dirty_ || !latest_map_) return;
+        auto map = latest_map_;
+        dirty_ = false;
+        inflate(*map);
+    }
 
-    std::vector<MaskOffset> mask_offsets_;
+    void inflate(const nav_msgs::msg::OccupancyGrid& map) {
+        const int w = static_cast<int>(map.info.width);
+        const int h = static_cast<int>(map.info.height);
+
+        // Validate map size and resolution.
+        if (w <= 0 || h <= 0 || static_cast<size_t>(w) * h != map.data.size()) return;
+
+        const double res = map.info.resolution;
+        if (res <= 0.0) return;
+
+        const double robot_radius = this->get_parameter("robot_radius").as_double();
+        const double safety_margin = this->get_parameter("safety_margin").as_double();
+        const int    occ_th = static_cast<int>(this->get_parameter("occupied_threshold").as_int());
+        const bool   exponential = (this->get_parameter("decay").as_string() == "exponential");
+        const double scaling = this->get_parameter("cost_scaling_factor").as_double();
+        const double inflation_radius = robot_radius + safety_margin;
+
+        nav_msgs::msg::OccupancyGrid out;
+        out.header = map.header;
+        out.header.stamp = this->now();
+        out.info = map.info;
+        out.data.assign(map.data.size(), 0);
+
+        // Obstacle mask for the distance transform: obstacle -> 0, else -> 255
+        // (cv::distanceTransform measures the distance to the nearest zero pixel).
+        // Unknown (-1) is treated as free here, matching the original node.
+        cv::Mat obs(h, w, CV_8U);
+        uchar* op = obs.data;
+        int obstacle_count = 0;
+        for (size_t i = 0; i < map.data.size(); ++i) {
+            const bool occ = (map.data[i] >= occ_th);
+            op[i] = occ ? 0 : 255;
+            obstacle_count += occ ? 1 : 0;
+        }
+
+        // No obstacles -> nothing to inflate; emit free space, preserving unknown.
+        if (obstacle_count == 0) {
+            for (size_t i = 0; i < map.data.size(); ++i)
+                if (map.data[i] < 0) out.data[i] = -1;
+            costmap_pub_->publish(out);
+            return;
+        }
+
+        cv::Mat dist_px;   // exact L2 distance (no labels needed -> PRECISE is fine)
+        cv::distanceTransform(obs, dist_px, cv::DIST_L2, cv::DIST_MASK_PRECISE);
+        const float* dp = dist_px.ptr<float>();
+
+        for (size_t i = 0; i < map.data.size(); ++i) {
+            const int8_t v = map.data[i];
+            if (v < 0) { out.data[i] = -1;  continue; }    // unknown stays unknown
+            if (v >= occ_th) { out.data[i] = 100; continue; }    // hard obstacle stays lethal
+
+            const double d = static_cast<double>(dp[i]) * res;   // metres to nearest obstacle
+            if (d <= robot_radius) {
+                out.data[i] = 100;                               // inscribed: lethal core
+            } else if (d <= inflation_radius) {
+                out.data[i] = gradedCost(d, robot_radius, safety_margin, exponential, scaling);
+            }
+            // else: free cell beyond influence -> stays 0
+        }
+
+        costmap_pub_->publish(out);
+    }
+
+    // Cushion cost for d in (robot_radius, inflation_radius], clamped to [1, 99].
+    static int8_t gradedCost(double d, double robot_radius, double safety_margin,
+        bool exponential, double scaling) {
+        double cost;
+        if (exponential) {
+            // nav2-style exponential falloff from the inscribed edge.
+            cost = 99.0 * std::exp(-scaling * (d - robot_radius));
+        } else {
+            // Linear decay: 99 at the inscribed edge down to 1 at the cushion edge.
+            const double factor = (safety_margin > 1e-6)
+                ? ((robot_radius + safety_margin) - d) / safety_margin : 0.0;
+            cost = 1.0 + factor * 98.0;
+        }
+        return static_cast<int8_t>(std::clamp<long>(std::lround(cost), 1, 99));
+    }
+
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
-    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_pub_;
-    rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr    costmap_pub_;
+    rclcpp::TimerBase::SharedPtr                                  timer_;
+    rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr        param_callback_handle_;
+
+    nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;
+    bool dirty_ = false;
 };
 
 int main(int argc, char** argv) {

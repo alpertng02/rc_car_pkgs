@@ -296,11 +296,20 @@ private:
             }
         }
 
-        // Goal reached once the car has actually SETTLED at the path end.
+        // Goal reached once the car has actually SETTLED at the path end. Gate on
+        // the MEASURED wheel speed, not just the command ramp: current_speed_
+        // reaches ~0 before the chassis stops, so latching the goal on it alone
+        // can drop the path while the car is still drifting, leaving it stopped
+        // short or mis-aligned.
         const double goal_yaw = quaternionToYaw(goal_pose.orientation.x, goal_pose.orientation.y,
             goal_pose.orientation.z, goal_pose.orientation.w);
         const double goal_yaw_err = std::abs(normalizeAngle(goal_yaw - robot_yaw));
-        if (dist_to_goal < goal_tol && std::abs(current_speed_) < 0.05) {
+        double goal_measured_speed;
+        {
+            std::lock_guard<std::mutex> lock(wheel_odom_mutex_);
+            goal_measured_speed = std::abs(latest_wheel_speed_);
+        }
+        if (dist_to_goal < goal_tol && std::abs(current_speed_) < 0.05 && goal_measured_speed < 0.05) {
             RCLCPP_INFO(this->get_logger(), "🏁 Goal reached (heading err %.1f°). Halting.",
                 goal_yaw_err * 180.0 / M_PI);
             publishStop();

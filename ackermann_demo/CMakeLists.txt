@@ -30,6 +30,8 @@ ament_target_dependencies(ackermann_astar_planner rclcpp nav_msgs geometry_msgs 
 
 add_executable(costmap_node src/costmap_node.cpp)
 ament_target_dependencies(costmap_node rclcpp nav_msgs)
+target_include_directories(costmap_node PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(costmap_node ${OpenCV_LIBS})
 
 add_executable(voronoi_costmap src/voronoi_costmap.cpp)
 ament_target_dependencies(voronoi_costmap rclcpp nav_msgs)

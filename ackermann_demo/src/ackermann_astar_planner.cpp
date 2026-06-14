@@ -470,8 +470,10 @@ public:
         // axle, the goal is offset back by L/2 so the car centre lands on it.
         this->declare_parameter("wheelbase",              0.1688);
 
+        // Latched QoS to match costmap_node's transient-local publisher, so a
+        // late-joining planner immediately receives the most recent costmap.
         map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-            "/inflated_costmap", 10,
+            "/inflated_costmap", rclcpp::QoS(1).reliable().transient_local(),
             std::bind(&AckermannAStarPlannerNode::mapCallback, this, std::placeholders::_1));
 
         goal_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -826,9 +828,25 @@ private:
         }
 
         // recompute headings from the smoothed geometry, honouring gear (a
-        // reversing segment's body heading is opposite its travel bearing).
+        // reversing segment's body heading is opposite its travel bearing). At a
+        // cusp the path reverses direction, so the tip's two neighbours sit on the
+        // SAME side of it and a central difference collapses to a near-zero,
+        // garbage bearing. That tip is the segment's final waypoint, off which the
+        // controller takes its front-axle reference and tangent — a bad heading
+        // there steers the car the wrong way into the cusp. Use a one-sided
+        // difference on the cusp side so the cusp poses stay continuous body
+        // headings the controller can track.
         for (size_t i = 1; i + 1 < n; ++i) {
-            double bearing = std::atan2(nodes[i+1].y - nodes[i-1].y, nodes[i+1].x - nodes[i-1].x);
+            const bool tip_here    = (nodes[i].direction != nodes[i+1].direction); // reverses just after i
+            const bool start_after = (nodes[i].direction != nodes[i-1].direction); // reversed just before i
+            double bearing;
+            if (tip_here) {
+                bearing = std::atan2(nodes[i].y - nodes[i-1].y, nodes[i].x - nodes[i-1].x);
+            } else if (start_after) {
+                bearing = std::atan2(nodes[i+1].y - nodes[i].y, nodes[i+1].x - nodes[i].x);
+            } else {
+                bearing = std::atan2(nodes[i+1].y - nodes[i-1].y, nodes[i+1].x - nodes[i-1].x);
+            }
             nodes[i].theta = (nodes[i].direction < 0) ? wrapPi(bearing + PI) : bearing;
         }
     }
