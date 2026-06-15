@@ -87,11 +87,11 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration('use_slam')), parameters=[slam_config_path, {'use_sim_time': True}]
     )
 
-    # 🏁 Structural parameters shared by both planners (the legacy and the
+    # Structural parameters shared by both planners (the legacy and the
     # ackermann planner declare the same core parameter names).
     planner_params = [{
         'use_sim_time': True,
-        'default_tolerance': 0.25,
+        'default_tolerance': 0.05,
         'turning_radius': 0.35,          # Kept tightly calibrated to your physical RC bounds
         'step_size': 0.05,
         'max_iterations': 500000,        # High exploration budget for long-distance searches
@@ -139,7 +139,7 @@ def generate_launch_description():
         }]
     )
     
-    # 🏎️ UPDATED: Added structural parameters for proprioceptive stall monitoring
+    # Stanley path tracker, including the proprioceptive stall-monitoring parameters.
     stanley_controller_node = Node(
         package='ackermann_demo',
         executable='stanley_controller',
@@ -171,7 +171,7 @@ def generate_launch_description():
             'path_timeout_sec': 20.0,             
             'ultrasonic_safety_dist': 0.20,       
 
-            # 🟢 ADDED: Proprioceptive Stall & Wheel Slip Monitoring Configurations
+            # Proprioceptive stall & wheel-slip monitoring
             'stall_velocity_threshold': 0.15,     # Minimum speed command to begin evaluating [m/s]
             'stall_odom_threshold': 0.02,         # Maximum speed baseline below which the car is considered stuck [m/s]
             'stall_accel_threshold': 0.05,        # Noise ceiling for real IMU linear acceleration frames [m/s²]

@@ -106,7 +106,7 @@ public:
         last_path_time_ = this->now();
         path_receive_time_ = this->now();
 
-        RCLCPP_INFO(this->get_logger(), "🏎️ Stanley Controller Online with Smooth Escape Pipelines.");
+        RCLCPP_INFO(this->get_logger(), "Stanley controller online.");
     }
 
 private:
@@ -310,7 +310,7 @@ private:
             goal_measured_speed = std::abs(latest_wheel_speed_);
         }
         if (dist_to_goal < goal_tol && std::abs(current_speed_) < 0.05 && goal_measured_speed < 0.05) {
-            RCLCPP_INFO(this->get_logger(), "🏁 Goal reached (heading err %.1f°). Halting.",
+            RCLCPP_INFO(this->get_logger(), "Goal reached (heading err %.1f deg). Halting.",
                 goal_yaw_err * 180.0 / M_PI);
             publishStop();
             std::lock_guard<std::mutex> lock(path_mutex_);

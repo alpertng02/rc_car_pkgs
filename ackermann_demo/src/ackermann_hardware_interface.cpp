@@ -1,7 +1,6 @@
 #include <hardware_interface/system_interface.hpp>
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
 #include <rclcpp/rclcpp.hpp>
-// ✅ FIXED: Added the required lifecycle state header
 #include <rclcpp_lifecycle/state.hpp>
 #include <fcntl.h>
 #include <termios.h>
@@ -56,7 +55,6 @@ public:
         return command_interfaces;
     }
 
-    // ✅ FIXED: Changed parameter type to rclcpp_lifecycle::State
     CallbackReturn on_activate(const rclcpp_lifecycle::State & /*previous_state*/) override {
         RCLCPP_INFO(rclcpp::get_logger("AckermannHardwareInterface"), "Connecting to serial port: %s", serial_port_name_.c_str());
         
@@ -86,7 +84,6 @@ public:
         return CallbackReturn::SUCCESS;
     }
 
-    // ✅ FIXED: Changed parameter type to rclcpp_lifecycle::State
     CallbackReturn on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/) override {
         if (serial_fd_ >= 0) {
             close(serial_fd_);
@@ -113,7 +110,7 @@ public:
         packet.left_steer_pos  = static_cast<float>(hw_commands_[2]);
         packet.right_steer_pos = static_cast<float>(hw_commands_[3]);
 
-        // ✅ FIXED: Capture and evaluate write return value to satisfy compilation rules
+        // Send the packet over the serial bus; log if the write fails.
         if (serial_fd_ >= 0) {
             ssize_t bytes_written = ::write(serial_fd_, &packet, sizeof(packet));
             if (bytes_written < 0) {

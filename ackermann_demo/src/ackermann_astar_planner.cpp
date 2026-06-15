@@ -461,7 +461,7 @@ public:
         this->declare_parameter("smooth_iterations",      120);
         this->declare_parameter("w_smooth",               0.20);
         this->declare_parameter("w_obstacle",             0.12);
-        this->declare_parameter("obstacle_dmax",          0.35);
+        this->declare_parameter("obstacle_dmax",          0.20);
         this->declare_parameter("w_voronoi",              0.10);
         // Match to the controller's max_linear_velocity so the planned decel
         // ramp targets the speed the controller will actually reach.
@@ -927,14 +927,14 @@ private:
 
         if (local_new_goal) {
             virtual_obstacles_.clear();
-            RCLCPP_INFO(this->get_logger(), "🧹 Fresh destination targeted. Cleared virtual obstacle memory.");
+            RCLCPP_INFO(this->get_logger(), "New goal received. Cleared virtual obstacle memory.");
             std::lock_guard<std::mutex> lk(map_mutex_);
             new_goal_set_ = false;
         }
 
         if (local_stall_dir != 0) {
-            double obs_project_x = sx + local_stall_dir * 0.35 * std::cos(syaw);
-            double obs_project_y = sy + local_stall_dir * 0.35 * std::sin(syaw);
+            double obs_project_x = sx + local_stall_dir * 0.2 * std::cos(syaw);
+            double obs_project_y = sy + local_stall_dir * 0.2 * std::sin(syaw);
             bool is_duplicate = false;
             for (const auto& obs : virtual_obstacles_) {
                 if (std::hypot(obs.first - obs_project_x, obs.second - obs_project_y) < 0.20) { is_duplicate = true; break; }

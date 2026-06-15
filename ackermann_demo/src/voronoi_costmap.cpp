@@ -60,7 +60,7 @@ public:
             std::chrono::duration<double>(period), std::bind(&VoronoiCostmapNode::onTimer, this));
 
         RCLCPP_INFO(this->get_logger(),
-            "🕸️  Voronoi field node online (OpenCV DT, %.2fs throttle) -> /voronoi_field", period);
+            "Voronoi field node online (OpenCV DT, %.2fs throttle) -> /voronoi_field", period);
     }
 
 private:

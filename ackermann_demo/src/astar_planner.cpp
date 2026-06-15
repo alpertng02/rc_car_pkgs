@@ -170,13 +170,13 @@ private:
         return static_cast<int>(map.data[cx + cy * static_cast<int>(map.info.width)]);
     }
 
-    // ── 🟢 UPDATED: Checks against injected hardware safety zones ────────────
+    // Free-space test that also rejects cells inside an injected virtual obstacle.
     bool cellIsFree(double wx, double wy, const nav_msgs::msg::OccupancyGrid& map, int max_cost,
                     const EscapeBubble& esc = EscapeBubble{}) const {
-        // Evaluate memory buffer of blind static stall coordinates
+        // Reject anything within 22 cm of a recorded blind-stall coordinate.
         for (const auto& obs : virtual_obstacles_) {
-            if (std::hypot(wx - obs.first, wy - obs.second) < 0.22) { // 22cm radial tracking safety boundary
-                return false; // Force immediate collision rejection
+            if (std::hypot(wx - obs.first, wy - obs.second) < 0.22) {
+                return false;
             }
         }
 
@@ -311,12 +311,12 @@ private:
         double gyaw = std::atan2(2.0*(local_goal->pose.orientation.w * local_goal->pose.orientation.z + local_goal->pose.orientation.x * local_goal->pose.orientation.y),
             1.0 - 2.0*(local_goal->pose.orientation.y * local_goal->pose.orientation.y + local_goal->pose.orientation.z * local_goal->pose.orientation.z));
 
-        // 🟢 FIXED: Clear virtual obstacles on fresh goal dispatch to prevent map ghosting.
-        // Consumed here so retries of a failing plan do not wipe the memory again
-        // (the stall-recovery obstacles must survive across retry ticks).
+        // Clear virtual obstacles on a fresh goal so stale stall markers don't ghost
+        // the map. Consumed here so retries of a failing plan do not wipe the memory
+        // again (the stall-recovery obstacles must survive across retry ticks).
         if (local_new_goal) {
             virtual_obstacles_.clear();
-            RCLCPP_INFO(this->get_logger(), "🧹 Fresh destination targeted. Cleared virtual obstacle memory.");
+            RCLCPP_INFO(this->get_logger(), "New goal received. Cleared virtual obstacle memory.");
             std::lock_guard<std::mutex> lk(map_mutex_);
             new_goal_set_ = false;
         }
