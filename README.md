@@ -1,47 +1,21 @@
-# RC Car Packages (`rc_car_pkgs`)
+# Ackermann Car Demo (`ackermann_demo`)
 
-A collection of packages and scripts designed for the control, navigation, and teleoperation of an RC car.
+An advanced ROS 2 simulation and autonomy stack for an Ackermann-steered vehicle. This package features a fully custom navigation pipeline, to utilize a paper-faithful Hybrid A* planner, a Stanley controller with stall monitoring, and a LiDAR-Camera sensor fusion.
 
-## Overview
-[Provide a brief description of what this project does. Example: This repository contains the ROS 2 packages required to operate a customized RC car, including motor control nodes, sensor data processing, and teleoperation scripts.]
+## Core Features
 
-## Features
-*   **[Feature 1]:** (e.g., Differential drive control)
-*   **[Feature 2]:** (e.g., Support for LiDAR/Camera sensors)
-*   **[Feature 3]:** (e.g., Autonomous navigation capabilities)
-*   **[Feature 4]:** (e.g., Teleoperation via joystick/keyboard)
+* **Custom Planner:** A specialized Ackermann Hybrid A* planner featuring Reed-Shepp analytic expansion, dual heuristics, and a Voronoi-field-aware smoother.
+* **Advanced Path Tracking:** Implements a Stanley controller tailored for Ackermann kinematics (`ackermann_steering_controller`). It includes operational constraints (acceleration ramp profiles) and built-in stall/collision monitoring using IMU data.
+* **Sensor Fusion & Mapping:** * Integrates `robot_localization` (EKF) for Wheel Odometry + IMU fusion.
+    * Full support for `slam_toolbox` (async online) for 2D occupancy grid mapping.
+* **LiDAR-Camera Voxel Fusion:** Optional nodes to colorize laser scans with camera RGB data (`/colored_scan`) and accumulate them into a persistent voxel map (`/colored_map`) aligned with the SLAM frame.
+* **Autonomous Exploration:** A frontier exploration node allows the car to map its environment and drive completely unattended.
+* **Hardware-Ready Teleop:** Multiplexed command velocities (`cmd_vel_mux`) supporting seamless switching between the autonomy stack and a PS4 controller (`joy` + `teleop_twist_joy`).
 
 ## Prerequisites
-To run this project, you will need:
-*   **Operating System:** [e.g., Ubuntu 22.04]
-*   **Frameworks:** [e.g., ROS 2 Humble, Python 3.x]
-*   **Hardware:** [e.g., Raspberry Pi, Arduino, Motor Driver, etc.]
 
-## Installation
+This package is built for ROS 2 (tested on Linux, including Ubuntu/Kubuntu) and relies on standard simulation and control frameworks. 
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/alpertng02/rc_car_pkgs.git](https://github.com/alpertng02/rc_car_pkgs.git)
-    cd rc_car_pkgs
-    ```
-
-2.  **Install dependencies:**
-    *(If using ROS)*
-    ```bash
-    rosdep install --from-paths src --ignore-src -r -y
-    ```
-    *(Or list other required libraries here)*
-
-3.  **Build the workspace:**
-    ```bash
-    colcon build
-    source install/setup.bash
-    ```
-
-## Usage
-
-Describe how to run your code here.
-
-**To start the base driver:**
+**Dependencies:**
 ```bash
-ros2 launch rc_car_bringup bringup.launch.py
+sudo apt install ros-<distro>-gazebo-ros-pkgs ros-<distro>-ros2-control ros-<distro>-ros2-controllers ros-<distro>-slam-toolbox ros-<distro>-robot-localization ros-<distro>-joy ros-<distro>-teleop-twist-joy
