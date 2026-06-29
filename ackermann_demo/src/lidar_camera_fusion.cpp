@@ -171,7 +171,7 @@ private:
             ++count;
         };
 
-        // Pass 1: scan ring — colorize, and record each column's lidar depth
+        // Pass 1: scan ring - colorize, and record each column's lidar depth
         std::vector<float> col_depth;
         if (dense) col_depth.assign(rgb.cols, std::numeric_limits<float>::quiet_NaN());
 

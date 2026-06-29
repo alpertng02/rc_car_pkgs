@@ -26,6 +26,9 @@ def generate_launch_description():
     use_nav_arg = DeclareLaunchArgument('use_nav', default_value='false')
     use_rviz_arg = DeclareLaunchArgument('use_rviz', default_value='true')
     use_cam_fuse_arg = DeclareLaunchArgument('use_cam_fuse', default_value='false')
+    # Hands-off frontier exploration to test the planner + controller with no
+    # operator input. Needs use_nav:=true and use_slam:=true to be useful.
+    use_search_arg = DeclareLaunchArgument('use_search', default_value='false')
     # Planner selection: 'ackermann' = paper-faithful Hybrid A* (RS analytic
     # expansion + dual heuristic + Voronoi-aware smoother); 'legacy' = original
     # astar_planner. Defaults to the closed-loop ackermann planner.
@@ -120,7 +123,7 @@ def generate_launch_description():
             'use_sim_time': True,
             'robot_radius': 0.18, 
             'safety_margin': 0.50,
-            'decay': 'exponential' 
+            'decay': 'linear' 
         }]
     )
 
@@ -169,7 +172,7 @@ def generate_launch_description():
             'steer_speed_reduction': 0.70,        
             'reverse_steer_speed_reduction': 0.2,
             'path_timeout_sec': 20.0,             
-            'ultrasonic_safety_dist': 0.20,       
+            'ultrasonic_safety_dist': 0.05,       
 
             # Proprioceptive stall & wheel-slip monitoring
             'stall_velocity_threshold': 0.15,     # Minimum speed command to begin evaluating [m/s]
@@ -220,11 +223,20 @@ def generate_launch_description():
         name='cmd_vel_mux',
         output='screen',
         parameters=[cmd_vel_mux_config, {'use_sim_time': True}],
-        remappings=[('/cmd_vel_out', '/cmd_vel')] 
+        remappings=[('/cmd_vel_out', '/cmd_vel')]
+    )
+
+    # Frontier explorer: publishes /goal_pose on its own to drive the planner +
+    # controller around unattended, then returns to the start pose.
+    exploration_node = Node(
+        package='ackermann_demo', executable='exploration_node.py', name='exploration_node',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('use_search')),
+        parameters=[{'use_sim_time': True}]
     )
 
     return LaunchDescription([
-        controller_ps4_arg, use_slam_arg, use_nav_arg, use_rviz_arg, use_cam_fuse_arg, planner_arg,
+        controller_ps4_arg, use_slam_arg, use_nav_arg, use_rviz_arg, use_cam_fuse_arg, use_search_arg, planner_arg,
         robot_state_publisher, gazebo, spawn_entity,
         joint_state_broadcaster_spawner, ackermann_steering_controller_spawner,
         ekf_node,
@@ -233,5 +245,6 @@ def generate_launch_description():
         ackermann_astar_planner_node, astar_planner_node, stanley_controller_node,
         voronoi_costmap_node, costmap_node,
         lidar_camera_fusion_node, cloud_accumulator_node,
+        exploration_node,
         rviz_node
     ])

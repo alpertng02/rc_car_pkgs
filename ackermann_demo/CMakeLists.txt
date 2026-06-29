@@ -88,6 +88,7 @@ install(TARGETS
 
 install(PROGRAMS
   scripts/odom_drift_eval.py
+  scripts/exploration_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

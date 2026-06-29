@@ -122,7 +122,7 @@ private:
         int last = 0;
         for (size_t i = 0; i < N; ++i) {
             const double vz = path.poses[i].pose.position.z;
-            int s = (vz > 1e-6) ? 1 : (vz < -1e-6 ? -1 : 0);
+            int s = (vz > 1e-6) ? 1 : (vz < -1e-6 ? -1 : 0); // 1e-6 tolerance for stopping.
             if (s != 0) last = s;
             dir[i] = (s != 0) ? s : last;     // zeros inherit the preceding direction
         }
